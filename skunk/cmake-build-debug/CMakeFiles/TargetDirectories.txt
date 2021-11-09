@@ -1,0 +1,3 @@
+/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles/BitBot.dir

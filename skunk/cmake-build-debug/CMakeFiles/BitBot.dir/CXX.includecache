@@ -1,0 +1,18 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/Users/jeremy/Documents/Chess/BitBot/board.cpp
+board.h
+/Users/jeremy/Documents/Chess/BitBot/board.h
+iostream
+-
+
+/Users/jeremy/Documents/Chess/BitBot/board.h
+stdint.h
+-
+
