@@ -53,10 +53,10 @@ RM = /Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/jeremy/Documents/Chess/BitBot
+CMAKE_SOURCE_DIR = /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug
+CMAKE_BINARY_DIR = /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug
 
 # Include any dependencies generated for this target.
 include CMakeFiles/BitBot.dir/depend.make
@@ -68,29 +68,29 @@ include CMakeFiles/BitBot.dir/flags.make
 
 CMakeFiles/BitBot.dir/main.cpp.o: CMakeFiles/BitBot.dir/flags.make
 CMakeFiles/BitBot.dir/main.cpp.o: ../main.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/BitBot.dir/main.cpp.o"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/BitBot.dir/main.cpp.o -c /Users/jeremy/Documents/Chess/BitBot/main.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/BitBot.dir/main.cpp.o"
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/BitBot.dir/main.cpp.o -c /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/main.cpp
 
 CMakeFiles/BitBot.dir/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/BitBot.dir/main.cpp.i"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jeremy/Documents/Chess/BitBot/main.cpp > CMakeFiles/BitBot.dir/main.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/main.cpp > CMakeFiles/BitBot.dir/main.cpp.i
 
 CMakeFiles/BitBot.dir/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/BitBot.dir/main.cpp.s"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Chess/BitBot/main.cpp -o CMakeFiles/BitBot.dir/main.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/main.cpp -o CMakeFiles/BitBot.dir/main.cpp.s
 
 CMakeFiles/BitBot.dir/board.cpp.o: CMakeFiles/BitBot.dir/flags.make
 CMakeFiles/BitBot.dir/board.cpp.o: ../board.cpp
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/BitBot.dir/board.cpp.o"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/BitBot.dir/board.cpp.o -c /Users/jeremy/Documents/Chess/BitBot/board.cpp
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --progress-dir=/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/BitBot.dir/board.cpp.o"
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -o CMakeFiles/BitBot.dir/board.cpp.o -c /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.cpp
 
 CMakeFiles/BitBot.dir/board.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Preprocessing CXX source to CMakeFiles/BitBot.dir/board.cpp.i"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jeremy/Documents/Chess/BitBot/board.cpp > CMakeFiles/BitBot.dir/board.cpp.i
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.cpp > CMakeFiles/BitBot.dir/board.cpp.i
 
 CMakeFiles/BitBot.dir/board.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green "Compiling CXX source to assembly CMakeFiles/BitBot.dir/board.cpp.s"
-	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Chess/BitBot/board.cpp -o CMakeFiles/BitBot.dir/board.cpp.s
+	/Library/Developer/CommandLineTools/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.cpp -o CMakeFiles/BitBot.dir/board.cpp.s
 
 # Object files for target BitBot
 BitBot_OBJECTS = \
@@ -104,7 +104,7 @@ BitBot: CMakeFiles/BitBot.dir/main.cpp.o
 BitBot: CMakeFiles/BitBot.dir/board.cpp.o
 BitBot: CMakeFiles/BitBot.dir/build.make
 BitBot: CMakeFiles/BitBot.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable BitBot"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable BitBot"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/BitBot.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
@@ -116,6 +116,6 @@ CMakeFiles/BitBot.dir/clean:
 .PHONY : CMakeFiles/BitBot.dir/clean
 
 CMakeFiles/BitBot.dir/depend:
-	cd /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/jeremy/Documents/Chess/BitBot /Users/jeremy/Documents/Chess/BitBot /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles/BitBot.dir/DependInfo.cmake --color=$(COLOR)
+	cd /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/BitBot.dir/DependInfo.cmake --color=$(COLOR)
 .PHONY : CMakeFiles/BitBot.dir/depend
 

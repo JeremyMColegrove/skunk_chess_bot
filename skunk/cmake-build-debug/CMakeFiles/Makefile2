@@ -54,10 +54,10 @@ RM = /Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/jeremy/Documents/Chess/BitBot
+CMAKE_SOURCE_DIR = /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug
+CMAKE_BINARY_DIR = /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug
 
 #=============================================================================
 # Directory level rules for the build root directory
@@ -81,14 +81,14 @@ clean: CMakeFiles/BitBot.dir/clean
 CMakeFiles/BitBot.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles --progress-num=1,2,3 "Built target BitBot"
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles --progress-num=1,2,3 "Built target BitBot"
 .PHONY : CMakeFiles/BitBot.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/BitBot.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles 3
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles 3
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/BitBot.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles 0
 .PHONY : CMakeFiles/BitBot.dir/rule
 
 # Convenience name for target.

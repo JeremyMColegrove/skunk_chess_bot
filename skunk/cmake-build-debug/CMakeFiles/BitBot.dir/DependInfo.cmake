@@ -8,8 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/Users/jeremy/Documents/Chess/BitBot/board.cpp" "/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles/BitBot.dir/board.cpp.o"
-  "/Users/jeremy/Documents/Chess/BitBot/main.cpp" "/Users/jeremy/Documents/Chess/BitBot/cmake-build-debug/CMakeFiles/BitBot.dir/main.cpp.o"
+  "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.cpp" "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/BitBot.dir/board.cpp.o"
+  "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/main.cpp" "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/BitBot.dir/main.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "AppleClang")
 
