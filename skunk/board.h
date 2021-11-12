@@ -92,10 +92,30 @@ enum {
     a4, b4, c4, d4, e4, f4, g4, h4,
     a3, b3, c3, d3, e3, f3, g3, h3,
     a2, b2, c2, d2, e2, f2, g2, h2,
-    a1, b1, c1, d1, e1, f1, g1, h1
+    a1, b1, c1, d1, e1, f1, g1, h1, no_square
 };
 
 enum { black, white };
+
+enum { rook, bishop, both };
+//Encode the pieces here as they would be output to the screen
+enum {P, N, B, R, Q, K, p, n, b, r, q, k};
+
+//Everything is public right now for testing purposes
+/**
+ * Castling rights
+ * bin      dec     meaning
+ * 0001     1       white king can castle to king side
+ * 0010     2       white king can castle to queen side
+ * 0100     4       black king can castle to king side
+ * 1000     8       black king can castle to queen side
+ *
+ *
+ *
+ */
+enum {wk = 1, wq = 2, bk = 4, bq = 8};
+
+const char ascii_pieces[] = "PNBRQKpnbrqk";
 
 class Skunk {
 public:
@@ -130,8 +150,6 @@ public:
             11, 10, 10, 10, 10, 10, 10, 11,
             12, 11, 11, 11, 11, 11, 11, 12,
     };
-
-// rook magic numbers
     U64 rook_magic_numbers[64] = {
             0x8a80104000800020ULL,
             0x140002000100040ULL,
@@ -266,12 +284,30 @@ public:
             0x8918844842082200ULL,
             0x4010011029020020ULL
     };
+    // convert ASCII character pieces to encoded constants
+    int char_pieces[115] = {
+            ['P'] = P,
+            ['N'] = N,
+            ['B'] = B,
+            ['R'] = R,
+            ['Q'] = Q,
+            ['K'] = K,
+            ['p'] = p,
+            ['n'] = n,
+            ['b'] = b,
+            ['r'] = r,
+            ['q'] = q,
+            ['k'] = k
+    };
 
     Skunk();
     ~Skunk();
 
-    void load_fen_string(char *fen);
-    void print_board(U64 board);
+    void parse_fen(char *fen);
+    void print_bitboard(U64 board);
+    void print_board();
+    void print_attacks(int side);
+
     U64 pawn_masks[2][64];
     U64 knight_masks[64];
     U64 king_masks[64];
@@ -279,24 +315,35 @@ public:
     U64 rook_masks[64];
     U64 rook_attacks[64][4096];
     U64 bishop_attacks[64][512];
+
     U64 construct_bishop_attacks(int square, U64 blockers);
     U64 construct_rook_attacks(int square, U64 blockers);
     U64 get_rook_attacks(int square, U64 occupancy);
     U64 get_bishop_attacks(int square, U64 occupancy);
+    U64 get_queen_attacks(int square, U64 occupancy);
+    int is_square_attacked(int square, int side);
     int bit_count(U64 board);
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
+    void fill_occupancies();
+    void generate_moves();
+    U64 occupancies[3];
+
 private:
     //Functions for getting each pieces valid moves (takes whose turn it should calculate for)
     //State for our pseudo random number generator
     //All of our bitboards
-    U64 WK, BK, WP, BP, WQ, BQ, WN, BN, WB, BB, WR, BR;
     void construct_pawn_tables();
     void construct_knight_tables();
     void construct_king_tables();
     void construct_bishop_tables();
     void construct_rook_tables();
     void construct_slider_attacks();
+    U64 bitboards[12];
+//    U64 occupancies[3];
+    int side = white;
+    int enpassant = no_square;
+    int castle = 0;
 
 };
 #endif //BITBOT_BOARD_H
