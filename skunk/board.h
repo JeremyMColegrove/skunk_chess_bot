@@ -20,6 +20,9 @@
 #define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
 
 
+
+#define row_4 1095216660480
+#define row_5 4278190080
 /**
  *          not_a_file
  *  8    	0  1  1  1  1  1  1  1
@@ -344,6 +347,8 @@ private:
     int side = white;
     int enpassant = no_square;
     int castle = 0;
+    int half_moves = 0;
+    int full_moves = 0;
 
 };
 #endif //BITBOT_BOARD_H
