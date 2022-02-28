@@ -1025,8 +1025,49 @@ void Skunk::print_moves(moves *moves_list)
     //RESTORE A MOVE
 }
 
+int Skunk::quiesence(int alpha, int beta) {
+    // make all of the moves
+    int evaluation = evaluate();
+
+
+    if (evaluation > alpha) alpha = evaluation;
+
+    if (alpha >= beta) return beta;
+
+    moves moves_list;
+
+    generate_moves(&moves_list);
+
+    for (int i=0; i<moves_list.count; i++) {
+
+        int move = moves_list.moves[i];
+
+        copy_board();
+
+        if (!make_move(move, only_captures)) {
+            continue;
+        }
+
+
+        int score = -quiesence(-beta, -alpha);
+
+        restore_board();
+
+        if (score > alpha) alpha = score;
+
+        if (alpha >= beta) return alpha;
+
+    }
+    return alpha;
+}
+
+
 int Skunk::negamax(int alpha, int beta, int depth) {
-    if (depth == 0) return evaluate();
+
+    if (depth == 0) {
+        // make all capture moves
+        return quiesence(alpha, beta);
+    }
 
     int score = INT_MIN;
 
@@ -1037,9 +1078,13 @@ int Skunk::negamax(int alpha, int beta, int depth) {
 
     generate_moves(&moves_list);
 
+
+    int check = is_square_attacked(get_ls1b_index(bitboards[side==white?K:k]), side ^ 1);
+
+    int legal_moves = 0;
+
     // loop through each move
     for (int i =0; i<moves_list.count; i++) {
-
         // make each move
         int move = moves_list.moves[i];
 
@@ -1049,19 +1094,34 @@ int Skunk::negamax(int alpha, int beta, int depth) {
             continue;
         }
 
+        legal_moves++;
+
+
         // evaluate score for each move
         int current_score = -negamax(-beta, -alpha, depth - 1);
+
+        restore_board();
 
         // check if high score
         if (current_score >= score) score = current_score;
 
         if (score > alpha) alpha = score;
 
-        // undo the move
-        restore_board();
-
         // alpha beta cuttoff
-        if (alpha>=beta) return alpha;
+        if (alpha>=beta) {
+            return alpha;
+        }
+    }
+
+
+    // checkmate if no legal moves
+    if (legal_moves == 0) {
+        //check if in check
+
+        if (check) {
+            // this is checkmate
+            return -49000 - depth;
+        } else return 0; // return stalemate score
     }
 
     return score;
@@ -1146,12 +1206,13 @@ void Skunk::play() {
         printf("Computer is thinking...\n");
 
         // now let the bot make a move
-        int response = search(5);
+        int response = search(3);
 
         printf("response is move %s to %s num %d\n", square_to_coordinate[decode_source(response)], square_to_coordinate[decode_destination(response)], response);
         make_move(response, all_moves);
     }
 }
+
 // the top level call to get the best move
 int Skunk::search(int depth) {
     moves moves_list;

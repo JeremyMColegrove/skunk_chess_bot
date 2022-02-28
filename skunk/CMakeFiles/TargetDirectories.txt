@@ -1,3 +1,0 @@
-/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/CMakeFiles/rebuild_cache.dir
-/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/CMakeFiles/edit_cache.dir
-/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/CMakeFiles/BitBot.dir

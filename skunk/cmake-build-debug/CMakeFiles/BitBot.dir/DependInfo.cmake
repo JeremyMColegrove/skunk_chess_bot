@@ -8,8 +8,8 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "C:/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/board.cpp" "CMakeFiles/BitBot.dir/board.cpp.obj" "gcc" "CMakeFiles/BitBot.dir/board.cpp.obj.d"
-  "C:/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/main.cpp" "CMakeFiles/BitBot.dir/main.cpp.obj" "gcc" "CMakeFiles/BitBot.dir/main.cpp.obj.d"
+  "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.cpp" "CMakeFiles/BitBot.dir/board.cpp.o" "gcc" "CMakeFiles/BitBot.dir/board.cpp.o.d"
+  "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/main.cpp" "CMakeFiles/BitBot.dir/main.cpp.o" "gcc" "CMakeFiles/BitBot.dir/main.cpp.o.d"
   )
 
 # Targets to which this target links.

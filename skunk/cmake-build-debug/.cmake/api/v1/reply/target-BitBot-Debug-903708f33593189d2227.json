@@ -2,10 +2,7 @@
 	"artifacts" : 
 	[
 		{
-			"path" : "BitBot.exe"
-		},
-		{
-			"path" : "BitBot.pdb"
+			"path" : "BitBot"
 		}
 	],
 	"backtrace" : 1,
@@ -38,10 +35,10 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : "-g"
+					"fragment" : "-g -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX12.1.sdk"
 				},
 				{
-					"fragment" : "-std=gnu++11"
+					"fragment" : "-std=gnu++2a"
 				}
 			],
 			"language" : "CXX",
@@ -51,7 +48,7 @@
 				[
 					1
 				],
-				"standard" : "11"
+				"standard" : "20"
 			},
 			"sourceIndexes" : 
 			[
@@ -72,16 +69,12 @@
 			{
 				"fragment" : "",
 				"role" : "flags"
-			},
-			{
-				"fragment" : "-lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32",
-				"role" : "libraries"
 			}
 		],
 		"language" : "CXX"
 	},
 	"name" : "BitBot",
-	"nameOnDisk" : "BitBot.exe",
+	"nameOnDisk" : "BitBot",
 	"paths" : 
 	{
 		"build" : ".",
