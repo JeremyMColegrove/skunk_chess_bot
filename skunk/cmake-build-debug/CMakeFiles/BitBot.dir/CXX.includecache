@@ -6,13 +6,19 @@
 
 #IncludeRegexTransform: 
 
-/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.cpp
-board.h
-/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.h
-iostream
--
-
 /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.h
 stdint.h
 -
+string.h
+-
+strings.h
+-
+
+/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/main.cpp
+iostream
+-
+stdint.h
+-
+board.h
+/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.h
 

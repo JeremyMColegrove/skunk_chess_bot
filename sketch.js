@@ -1,9 +1,9 @@
-let FEN = "r1b1k1nr/p2p1pNp/n2B4/1p1NP2P/6P1/3P1Q2/P1P1K3/q5b1" //Starting pos 1
+// let FEN = "r1b1k1nr/p2p1pNp/n2B4/1p1NP2P/6P1/3P1Q2/P1P1K3/q5b1" //Starting pos 1
 // let FEN = '1nb1k1nr/1p3p1p/2p3p1/8/1b1pPK2/N2P2N1/P1P1BPq1/R4R2'
 // let FEN = '8/P7/8/8/8/8/p7/8'
 // let FEN = 'K7/8/8/7k8/8/3r4/1r6'
 // let FEN = 'r6k/8/8/8/8/K7/8/r7'
-// let FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR" //Regular starting pos
+let FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR" //Regular starting pos
 let flip = 0
 // let FEN = '8/8/8/8/4p3/8/5P2/8' //En Passant test 1
 // let FEN = '8/4p3/8/8/3P1P2/8/1p6/8' //En Passant test 2
@@ -65,7 +65,7 @@ function initGame()
     let width = screen.height*.7
     board = new Board(width)
     board.engine = new Engine(3)
-    // board.engine = new MonteCarlo(3200)
+    board.engine2 = new MonteCarlo(3200)
     board.initialize()
 }
 
