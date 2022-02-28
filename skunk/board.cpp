@@ -48,6 +48,9 @@ void Skunk::parse_fen(char *fen) {
 
         // get the piece number
         int piece = char_pieces[c];
+        // switch (piece) {
+        //     case ''
+        // }
 
         // set the bit on the correct bitboard
         set_bit(bitboards[piece], square);
@@ -163,6 +166,23 @@ Skunk::Skunk() {
     side = white;
     //reset our castle rights
     castle = 0;
+
+    // construct the piece array char_pieces
+    // white
+    char_pieces['P'] = P;
+    char_pieces['N'] = N;
+    char_pieces['B'] = B;
+    char_pieces['R'] = R;
+    char_pieces['Q'] = Q;
+    char_pieces['K'] = K;
+
+    //black
+    char_pieces['p'] = p;
+    char_pieces['n'] = n;
+    char_pieces['b'] = b;
+    char_pieces['r'] = r;
+    char_pieces['q'] = q;
+    char_pieces['k'] = k;
 }
 
 Skunk::~Skunk() = default;
@@ -1080,7 +1100,7 @@ void Skunk::play() {
 
         // get the piece on the square
         int piece = -1;
-        for (int i=P; i<k; i++) {
+        for (int i=P; i<=k; i++) {
             if (get_bit(bitboards[i], source)) {
                 piece = i;
                 break;
@@ -1101,11 +1121,12 @@ void Skunk::play() {
         }
 
 
-        int move = encode_move(source, destination, piece, 0, (capture?1:0), 0, 0, 0);
+        int move = encode_move(source, destination, piece, 0, capture, 0, 0, 0);
 
         // check to see if it is a valid move
         moves moves_list;
         generate_moves(&moves_list);
+
         int valid = -1;
         for (int i=0; i<moves_list.count; i++) {
             if (decode_source(moves_list.moves[i])==source && decode_destination(moves_list.moves[i])==destination) {
@@ -1123,9 +1144,11 @@ void Skunk::play() {
 
         print_board();
         printf("Computer is thinking...\n");
+
         // now let the bot make a move
         int response = search(5);
 
+        printf("response is move %s to %s num %d\n", square_to_coordinate[decode_source(response)], square_to_coordinate[decode_destination(response)], response);
         make_move(response, all_moves);
     }
 }

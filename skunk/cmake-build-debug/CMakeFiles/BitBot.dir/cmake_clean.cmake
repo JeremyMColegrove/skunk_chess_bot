@@ -1,8 +1,12 @@
 file(REMOVE_RECURSE
-  "BitBot"
+  "BitBot.exe"
+  "BitBot.exe.manifest"
   "BitBot.pdb"
-  "CMakeFiles/BitBot.dir/board.cpp.o"
-  "CMakeFiles/BitBot.dir/main.cpp.o"
+  "CMakeFiles/BitBot.dir/board.cpp.obj"
+  "CMakeFiles/BitBot.dir/board.cpp.obj.d"
+  "CMakeFiles/BitBot.dir/main.cpp.obj"
+  "CMakeFiles/BitBot.dir/main.cpp.obj.d"
+  "libBitBot.dll.a"
 )
 
 # Per-language clean rules from dependency scanning.

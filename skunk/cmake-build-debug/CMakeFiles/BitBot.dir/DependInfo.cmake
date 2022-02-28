@@ -4,21 +4,12 @@ set(CMAKE_DEPENDS_IN_PROJECT_ONLY OFF)
 
 # The set of languages for which implicit dependencies are needed:
 set(CMAKE_DEPENDS_LANGUAGES
-  "CXX"
-  )
-# The set of files for implicit dependencies of each language:
-set(CMAKE_DEPENDS_CHECK_CXX
-  "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/board.cpp" "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/BitBot.dir/board.cpp.o"
-  "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/main.cpp" "/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/BitBot.dir/main.cpp.o"
-  )
-set(CMAKE_CXX_COMPILER_ID "AppleClang")
-
-# The include file search paths:
-set(CMAKE_CXX_TARGET_INCLUDE_PATH
   )
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "C:/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/board.cpp" "CMakeFiles/BitBot.dir/board.cpp.obj" "gcc" "CMakeFiles/BitBot.dir/board.cpp.obj.d"
+  "C:/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/main.cpp" "CMakeFiles/BitBot.dir/main.cpp.obj" "gcc" "CMakeFiles/BitBot.dir/main.cpp.obj.d"
   )
 
 # Targets to which this target links.

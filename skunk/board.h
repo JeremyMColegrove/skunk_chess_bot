@@ -6,7 +6,7 @@
 #define BITBOT_BOARD_H
 #include <stdint.h>
 #include <string.h>
-#include <strings.h>
+#include <climits>
 //Our bitboard type
 #define U64 unsigned long long
 
@@ -167,8 +167,8 @@ typedef struct {
 } moves;
 
 typedef struct {
-    int score;
     int move;
+    int score;
 } result;
 
 
@@ -350,22 +350,13 @@ public:
             0x4010011029020020ULL
     };
     // convert ASCII character pieces to encoded constants
+    
     char *unicode_pieces[12] = { "♙", "♘", "♗", "♖", "♕", "♔","♟︎", "♞", "♝", "♜", "♛", "♚" };
 
-    int char_pieces[115] = {
-            ['P'] = P,
-            ['N'] = N,
-            ['B'] = B,
-            ['R'] = R,
-            ['Q'] = Q,
-            ['K'] = K,
-            ['p'] = p,
-            ['n'] = n,
-            ['b'] = b,
-            ['r'] = r,
-            ['q'] = q,
-            ['k'] = k
-    };
+//     int char_pieces[12] = {P, N, B, R, Q, K, p, n, b, r, q, k};
+
+        // must initialize these like char_pieces['P'] = Pw
+    int char_pieces[115];
 
     const int castling_rights[64] = {
             7, 15, 15, 15,  3, 15, 15, 11,

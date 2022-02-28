@@ -1,0 +1,30 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/board.cpp
+board.h
+/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/board.h
+iostream
+-
+
+/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/board.h
+stdint.h
+-
+string.h
+-
+climits
+-
+
+/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/main.cpp
+iostream
+-
+stdint.h
+-
+board.h
+/mnt/c/Users/Jeremy/Documents/Github/skunk_chess_bot/skunk/board.h
+
