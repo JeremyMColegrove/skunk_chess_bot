@@ -1,2 +1,2 @@
-/cmake-build-debug
-.DS-STORE
+cmake-build-debug/**
+.DS_STORE
