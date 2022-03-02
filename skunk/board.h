@@ -7,6 +7,9 @@
 #include <stdint.h>
 #include <string.h>
 #include <climits>
+#include <algorithm>
+#include <chrono>
+
 //Our bitboard type
 #define U64 unsigned long long
 
@@ -44,9 +47,17 @@
 #define decode_enpassant(move) ((move) & 0x400000)
 #define decode_castle(move) ((move) & 0x800000)
 #define flip_square(sq) (sq ^ 56)
+#define MAX_PLY 128
+#define CHECKMATE 500000
+#define NULL_R 2
 
-#define row_4 1095216660480
-#define row_5 4278190080
+// transposition table definitions
+//#define HASH_SIZE 3999971 //~4 MB (must be prime) for actual games
+#define HASH_SIZE 40000 // small amount for testing
+#define HASH_EXACT 0
+#define HASH_ALPHA 1
+#define HASH_BETA 2
+
 
 
 
@@ -56,12 +67,13 @@ int castle_copy, side_copy, enpassant_copy; \
 memcpy(bitboards_copy, bitboards, sizeof(bitboards)); \
 memcpy(occupancies_copy, occupancies, sizeof(occupancies)); \
 enpassant_copy = enpassant; castle_copy = castle; side_copy = side; \
+U64 zobrist_copy = zobrist; \
 
 #define restore_board() \
     memcpy(bitboards, bitboards_copy, sizeof(bitboards)); \
-    memcpy(occupancies_copy, occupancies, sizeof(occupancies)); \
+    memcpy(occupancies, occupancies_copy,  sizeof(occupancies)); \
     enpassant = enpassant_copy; castle = castle_copy; side = side_copy; \
-
+    zobrist = zobrist_copy; \
 //move types
 enum {all_moves, only_captures};
 /**
@@ -164,13 +176,24 @@ const char ascii_pieces[] = "PNBRQKpnbrqk";
 typedef struct {
     int moves[256];
     int count;
-} moves;
+} t_moves;
+
+typedef struct {
+    int cmove;              // Number of t_moves in the line.
+    int argmove[MAX_PLY];  // The line.
+}   t_line;
 
 typedef struct {
     int move;
     int score;
-} result;
+} t_result;
 
+typedef struct {
+    U64 hash;
+    int depth;
+    int flags;
+    int score;
+} t_entry;
 
 typedef struct {
     int nodes[MAX_PERFT_DEPTH]; // handle up to 24 levels
@@ -535,6 +558,11 @@ public:
             eg_king_table,
     };
 
+    // killer t_moves
+    int killer_moves[2][MAX_PLY];
+
+    int history_moves[12][64];
+
     // MVV LVA [attacker][victim]
     int mvv_lva[12][12] = {
             105, 205, 305, 405, 505, 605,  105, 205, 305, 405, 505, 605,
@@ -551,6 +579,15 @@ public:
             101, 201, 301, 401, 501, 601,  101, 201, 301, 401, 501, 601,
             100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
     };
+    unsigned int seed = 1804289383;
+
+    // ZOBRISK HASHING
+    U64 piece_keys[12][64];
+    U64 enpassant_keys[64];
+    U64 castle_keys[16];
+    U64 side_key;
+
+    t_entry *transposition_table; // massive array
 
     Skunk();
     ~Skunk();
@@ -578,21 +615,37 @@ public:
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
     void fill_occupancies();
-    void generate_moves(moves *moves_list);
+    void generate_moves(t_moves *moves_list);
     U64 occupancies[3];
     int make_move(int move, int move_flag);
     U64 bitboards[12];
     void perft_test(int depth);
     int evaluate();
-    int search(int depth);
-    int negamax(int alpha, int beta, int depth);
-    void play();
+    int null_ok();
+    int search(int maxDepth);
+    int negamax(int alpha, int beta, int depth, t_line *pline);
+    int quiesence(int alpha, int beta, t_line *pline);
+
+    int is_checkmate();
+    int is_check();
+    void play(int difficulty);
     int coordinate_to_square(char *coordinate);
-    int quiesence(int alpha, int beta);
+    int score_move(int move);
+    void sort_moves(t_moves &moves_list);
+    unsigned int get_random_U32_number();
+    U64 get_random_U64_number();
+    U64 generate_zobrist();
+    int *transposition_table_read(int &alpha, int &beta, int depth);
+    void transposition_table_write(int depth, int score, int hash);
+    void print_move(int move);
+    void init_transposition();
+    void test_moves_sort();
+    void print_moves(t_moves *moves_list);
+
 private:
     void perft_test_helper(int depth);
 
-    //Functions for getting each pieces valid moves (takes whose turn it should calculate for)
+    //Functions for getting each pieces valid t_moves (takes whose turn it should calculate for)
     //State for our pseudo random number generator
     //All of our bitboards
     void construct_pawn_tables();
@@ -601,15 +654,16 @@ private:
     void construct_bishop_tables();
     void construct_rook_tables();
     void construct_slider_attacks();
-    void add_move(moves *moves_list, int move);
+    void add_move(t_moves *moves_list, int move);
     void clear_moves();
-    void print_moves(moves *moves_list);
 //    U64 occupancies[3];
     int side = white;
     int enpassant = no_square;
     int castle = 0;
-    int half_moves = 0;
     int full_moves = 0;
-
+    int ply = 0;
+    U64 zobrist;
+    int cache_hit = 0;
+    int cache_miss = 0;
 };
 #endif //BITBOT_BOARD_H
