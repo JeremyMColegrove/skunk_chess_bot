@@ -9,10 +9,22 @@
 #include <climits>
 #include <algorithm>
 #include <chrono>
+#include <thread>
+#ifdef _WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#endif
 
 //Our bitboard type
 #define U64 unsigned long long
 
+// flag for enabling asserts in the code for debugging and error checking i.e. zobrist key checking
+//#define DEBUG
+// flag for enabling the transposition table
+#define TRANSPOSITION_TABLE
+// flag for enabling NULL MOVE in negamax
+#define NULL_MOVE
 
 
 //Some macros for getting and setting bits
@@ -32,7 +44,7 @@
     (piece << 12) |                                                                             \
     (promoted << 16) |                                                                          \
     (capture << 20) |                                                                           \
-    (double_push << 21) |                                                                            \
+    (double_push << 21) |                                                                       \
     (enpassant << 22) |                                                                         \
     (castling << 23)
 
@@ -47,23 +59,23 @@
 #define decode_enpassant(move) ((move) & 0x400000)
 #define decode_castle(move) ((move) & 0x800000)
 #define flip_square(sq) (sq ^ 56)
-#define MAX_PLY 128
+#define MAX_PLY 72
 #define CHECKMATE 500000
-#define NULL_R 2
-
+#define NULL_R 3
+#define NO_VALUE 9999999
 // transposition table definitions
 //#define HASH_SIZE 3999971 //~4 MB (must be prime) for actual games
-#define HASH_SIZE 40000 // small amount for testing
+#define HASH_SIZE 4000000 // small amount for testing
 #define HASH_EXACT 0
-#define HASH_ALPHA 1
-#define HASH_BETA 2
+#define HASH_LOWERBOUND 1
+#define HASH_UPPERBOUND 2
 
 
 
 
 #define copy_board() \
 U64 bitboards_copy[12], occupancies_copy[3]; \
-int castle_copy, side_copy, enpassant_copy; \
+int castle_copy=0, side_copy=0, enpassant_copy=0; \
 memcpy(bitboards_copy, bitboards, sizeof(bitboards)); \
 memcpy(occupancies_copy, occupancies, sizeof(occupancies)); \
 enpassant_copy = enpassant; castle_copy = castle; side_copy = side; \
@@ -193,6 +205,7 @@ typedef struct {
     int depth;
     int flags;
     int score;
+    int move;
 } t_entry;
 
 typedef struct {
@@ -558,10 +571,89 @@ public:
             eg_king_table,
     };
 
+    // pawn positional score
+    const int pawn_score[64] =
+            {
+                    90,  90,  90,  90,  90,  90,  90,  90,
+                    30,  30,  30,  40,  40,  30,  30,  30,
+                    20,  20,  20,  30,  30,  30,  20,  20,
+                    10,  10,  10,  20,  20,  10,  10,  10,
+                    5,   5,  10,  20,  20,   5,   5,   5,
+                    0,   0,   0,   5,   5,   0,   0,   0,
+                    0,   0,   0, -10, -10,   0,   0,   0,
+                    0,   0,   0,   0,   0,   0,   0,   0
+            };
+
+// knight positional score
+    const int knight_score[64] =
+            {
+                    -5,   0,   0,   0,   0,   0,   0,  -5,
+                    -5,   0,   0,  10,  10,   0,   0,  -5,
+                    -5,   5,  20,  20,  20,  20,   5,  -5,
+                    -5,  10,  20,  30,  30,  20,  10,  -5,
+                    -5,  10,  20,  30,  30,  20,  10,  -5,
+                    -5,   5,  20,  10,  10,  20,   5,  -5,
+                    -5,   0,   0,   0,   0,   0,   0,  -5,
+                    -5, -10,   0,   0,   0,   0, -10,  -5
+            };
+
+// bishop positional score
+    const int bishop_score[64] =
+            {
+                    0,   0,   0,   0,   0,   0,   0,   0,
+                    0,   0,   0,   0,   0,   0,   0,   0,
+                    0,   0,   0,  10,  10,   0,   0,   0,
+                    0,   0,  10,  20,  20,  10,   0,   0,
+                    0,   0,  10,  20,  20,  10,   0,   0,
+                    0,  10,   0,   0,   0,   0,  10,   0,
+                    0,  30,   0,   0,   0,   0,  30,   0,
+                    0,   0, -10,   0,   0, -10,   0,   0
+
+            };
+
+// rook positional score
+    const int rook_score[64] =
+            {
+                    50,  50,  50,  50,  50,  50,  50,  50,
+                    50,  50,  50,  50,  50,  50,  50,  50,
+                    0,   0,  10,  20,  20,  10,   0,   0,
+                    0,   0,  10,  20,  20,  10,   0,   0,
+                    0,   0,  10,  20,  20,  10,   0,   0,
+                    0,   0,  10,  20,  20,  10,   0,   0,
+                    0,   0,  10,  20,  20,  10,   0,   0,
+                    0,   0,   0,  20,  20,   0,   0,   0
+
+            };
+
+// king positional score
+    const int king_score[64] =
+            {
+                    0,   0,   0,   0,   0,   0,   0,   0,
+                    0,   0,   5,   5,   5,   5,   0,   0,
+                    0,   5,   5,  10,  10,   5,   5,   0,
+                    0,   5,  10,  20,  20,  10,   5,   0,
+                    0,   5,  10,  20,  20,  10,   5,   0,
+                    0,   0,   5,  10,  10,   5,   0,   0,
+                    0,   5,   5,  -5,  -5,   0,   5,   0,
+                    0,   0,   5,   0, -15,   0,  10,   0
+            };
+
+// mirror positional score tables for opposite side
+    const int mirror_score[128] =
+            {
+                    a1, b1, c1, d1, e1, f1, g1, h1,
+                    a2, b2, c2, d2, e2, f2, g2, h2,
+                    a3, b3, c3, d3, e3, f3, g3, h3,
+                    a4, b4, c4, d4, e4, f4, g4, h4,
+                    a5, b5, c5, d5, e5, f5, g5, h5,
+                    a6, b6, c6, d6, e6, f6, g6, h6,
+                    a7, b7, c7, d7, e7, f7, g7, h7,
+                    a8, b8, c8, d8, e8, f8, g8, h8
+            };
     // killer t_moves
     int killer_moves[2][MAX_PLY];
 
-    int history_moves[12][64];
+    int history_moves[2][64][64];
 
     // MVV LVA [attacker][victim]
     int mvv_lva[12][12] = {
@@ -587,7 +679,7 @@ public:
     U64 castle_keys[16];
     U64 side_key;
 
-    t_entry *transposition_table; // massive array
+    t_entry *transposition_table; // tt table for negamax search
 
     Skunk();
     ~Skunk();
@@ -615,16 +707,16 @@ public:
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
     void fill_occupancies();
-    void generate_moves(t_moves *moves_list);
+    void generate_moves(t_moves &moves_list);
     U64 occupancies[3];
     int make_move(int move, int move_flag);
     U64 bitboards[12];
     void perft_test(int depth);
     int evaluate();
     int null_ok();
-    int search(int maxDepth);
+    int search(int maxDepth, int print_stats);
     int negamax(int alpha, int beta, int depth, t_line *pline);
-    int quiesence(int alpha, int beta, t_line *pline);
+    int quiesence(int alpha, int beta, int depth);
 
     int is_checkmate();
     int is_check();
@@ -635,13 +727,19 @@ public:
     unsigned int get_random_U32_number();
     U64 get_random_U64_number();
     U64 generate_zobrist();
-    int *transposition_table_read(int &alpha, int &beta, int depth);
-    void transposition_table_write(int depth, int score, int hash);
     void print_move(int move);
-    void init_transposition();
+    void init();
     void test_moves_sort();
-    void print_moves(t_moves *moves_list);
-
+    void print_moves(t_moves &moves_list);
+    int score_to_tt(int score, int ply);
+    int score_from_tt(int score, int ply);
+    void clear_transposition_tables();
+    void dual(int depth, int milli_sleep);
+    void play_person();
+    U64 zobrist = 0ULL;
+    int check_time();
+    std::chrono::steady_clock::time_point start_time;
+    int time_check_node_interval = 50000;
 private:
     void perft_test_helper(int depth);
 
@@ -654,7 +752,7 @@ private:
     void construct_bishop_tables();
     void construct_rook_tables();
     void construct_slider_attacks();
-    void add_move(t_moves *moves_list, int move);
+    void add_move(t_moves &moves_list, int move);
     void clear_moves();
 //    U64 occupancies[3];
     int side = white;
@@ -662,7 +760,8 @@ private:
     int castle = 0;
     int full_moves = 0;
     int ply = 0;
-    U64 zobrist;
+    int nodes = 0;
+    int quiesence_moves = 0;
     int cache_hit = 0;
     int cache_miss = 0;
 };
