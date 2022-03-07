@@ -63,6 +63,8 @@
 #define CHECKMATE 500000
 #define NULL_R 3
 #define NO_VALUE 9999999
+#define DO_NULL 1
+#define NO_NULL 0
 // transposition table definitions
 //#define HASH_SIZE 3999971 //~4 MB (must be prime) for actual games
 #define HASH_SIZE 4000000 // small amount for testing
@@ -582,7 +584,7 @@ public:
     int evaluate();
     int null_ok();
     int search(int maxDepth);
-    int negamax(int alpha, int beta, int depth, t_line *pline);
+    int negamax(int alpha, int beta, int depth, int do_null, t_line *pline);
     int quiesence(int alpha, int beta, int depth);
 
     int is_checkmate();
@@ -611,7 +613,6 @@ public:
     void parse_option(char *command);
     char *fen_start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int UCI_AnalysisMode = 1;
-    int UCI_PVSSearchMode = 1;
 private:
     void perft_test_helper(int depth);
 

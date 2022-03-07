@@ -44,7 +44,6 @@ void uci_loop() {
             printf("id name SkunkBot\n");
             printf("id author Jeremy Colegrove\n");
             printf("option name UCI_AnalysisMode type check default true\n");   // option to enable extra info printed like pvs lines
-            printf("option name UCI_PVSSearchMode type check default true\n");  // option to enable PVS search
 
             printf("uciok\n");
         } else if (strncmp(input, "setoption", 9)==0) {

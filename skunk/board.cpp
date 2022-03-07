@@ -1320,7 +1320,7 @@ int Skunk::quiesence(int alpha, int beta, int depth) {
 
 
 
-int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
+int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
 
     nodes ++ ;
 
@@ -1411,7 +1411,7 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
     /*
      * Lets do some null move pruning here to see if our opponent has a response to this move
      */
-    if (!check && ply && depth >= NULL_R + 1) {
+    if (do_null && !check && ply && depth >= NULL_R + 1) {
         // switch sides
         copy_board();
         side ^= 1;
@@ -1422,7 +1422,7 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
          * Here we make a call to negamax again, so our opponent makes two moves in a row.
          * We do not want this move to contribute to our PV, so we pass null in for that arg
          */
-        int score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, NULL);
+        int score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, NO_NULL, NULL);
         side ^= 1;
         restore_board();
         if (score >= beta) {
@@ -1466,20 +1466,34 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
         assert(zobrist == generate_zobrist());
 #endif
 
-        valid_moves ++;
+
         ply ++;
         repitition.count ++;
         repitition.table[repitition.count] = zobrist;
 
         int test;
-        if (found_principle_variation) {
-            test = -negamax(-alpha -1, -alpha, depth - 1, NULL);
-            if (test > alpha && test < beta)
-                test = -negamax(-beta, -alpha, depth - 1, pline);
-        } else
-            test = -negamax(-beta, -alpha, depth - 1, &line);
+
+        /*
+         * If we have not eval a node yet, we do so here
+         */
+        if (valid_moves == 0) {
+            test = -negamax(-beta, -alpha, depth -1, DO_NULL, pline);
+        } else {
+            // LMR
+            if (valid_moves > 3 && depth > 2 && !check && decode_capture(move)==0 && decode_promoted(move)==0) {
+                test = -negamax(-alpha - 1, -alpha, depth - 2, DO_NULL, pline);
+            } else test = alpha + 1; // make sure to do the PVS
+
+            // PVS search
+            if (test>alpha) {
+                test = -negamax(-alpha - 1, -alpha, depth - 1, DO_NULL, pline);
+                if (test > alpha && test < beta) test = -negamax(-beta, -alpha, depth - 1, DO_NULL, pline);
+            }
+        }
 
 
+
+        valid_moves ++;
         ply --;
         repitition.count--;
 
@@ -1490,6 +1504,7 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
 
         restore_board();
 
+
         if (score >= beta) {
             // ADD mask ply check here to avoid segfaults
             if (!decode_capture(move) && ply < MAX_PLY) {
@@ -1497,7 +1512,7 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
                 killer_moves[1][ply] = killer_moves[0][ply];
                 killer_moves[0][ply] = move;
             }
-            // we want to be able to score TT entries here, if not we may not hit as many
+
 #ifdef TRANSPOSITION_TABLE
             entry->score = beta;
             entry->flags = HASH_LOWERBOUND;
@@ -1508,10 +1523,10 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
             return beta;
         }
 
+
         if (score > alpha) {
             alpha = score;
 
-            if (UCI_PVSSearchMode) found_principle_variation = true;
             // write the move to our PV line
             if (pline != NULL) {
                 pline->argmove[0] = move;
@@ -1527,6 +1542,8 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
             score = (-CHECKMATE + ply);
         else score = 0;
     }
+
+
 #ifdef TRANSPOSITION_TABLE
     /*
      * We update our transposition table entry to reflect current score of node, etc.
@@ -1577,7 +1594,7 @@ int Skunk::search(int maxDepth) {
         ply = 0;
         pline.cmove = 0;
 
-        int score = negamax(-INT_MIN + 1, INT_MAX, depth, &pline);
+        int score = negamax(-INT_MIN + 1, INT_MAX, depth, DO_NULL, &pline);
 
         previous_pv_line = pline;
 
@@ -1660,7 +1677,7 @@ void Skunk::parse_option(char *command) {
 }
 
 void Skunk::parse_go(char *command) {
-    int depth = 7;
+    int depth = 8;
     char *current_depth = NULL;
     if ((current_depth = strstr(command, "depth"))) {
         depth = atoi(current_depth + 6);
