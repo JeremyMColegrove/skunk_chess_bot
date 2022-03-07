@@ -191,6 +191,7 @@ void Skunk::init() {
 
     fill_occupancies();
 
+    repitition.count = 0;
 
     // intialize zobrist hashing random keys
     for (int piece=P; piece <= k; piece++) {
@@ -298,7 +299,9 @@ U64 Skunk::get_random_U64_number()
     return n1 | (n2 << 16) | (n3 << 32) | (n4 << 48);
 }
 Skunk::~Skunk() {
-    delete[] transposition_table;
+    if (transposition_table != NULL) {
+        delete[] transposition_table;
+    }
 }
 
 void Skunk::construct_pawn_tables() {
@@ -1190,6 +1193,13 @@ void Skunk::sort_moves(t_moves &moves_list) {
 }
 
 int Skunk::score_move(int move) {
+
+    // check if the move exists in the previous search results
+    if (ply < previous_pv_line.cmove && move == previous_pv_line.argmove[ply]) {
+        return 20000;
+    }
+
+
     if (decode_capture(move)) {
         // consult the lookup table
         int attacker = decode_piece(move);
@@ -1270,6 +1280,7 @@ int Skunk::quiesence(int alpha, int beta, int depth) {
 
     int score = INT_MIN;
 
+
     for (int i=0; i<moves_list.count; i++) {
 
         int move = moves_list.moves[i];
@@ -1321,7 +1332,14 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
 //    }
 
     /*
-     * Our base case
+     * Check for repetitions (does not work?)
+     */
+    if (ply && is_repitition()) {
+        return 0;
+    }
+
+    /*
+     * Base case
      * Here we need to set the number of moves in our PV to 0 so that when collapsing up the tree the number of moves in cmove is correct
      * (otherwise it could have too large of a number from a previous search and segfault)
      */
@@ -1429,6 +1447,7 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
 
     int valid_moves = 0;
 
+    int found_principle_variation = false;
 
     int best = 0;
 
@@ -1449,8 +1468,20 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
 
         valid_moves ++;
         ply ++;
-        int test = -negamax(-beta, -alpha, depth - 1, &line);
+        repitition.count ++;
+        repitition.table[repitition.count] = zobrist;
+
+        int test;
+        if (found_principle_variation) {
+            test = -negamax(-alpha -1, -alpha, depth - 1, NULL);
+            if (test > alpha && test < beta)
+                test = -negamax(-beta, -alpha, depth - 1, pline);
+        } else
+            test = -negamax(-beta, -alpha, depth - 1, &line);
+
+
         ply --;
+        repitition.count--;
 
         if (test > score) {
             score = test;
@@ -1459,10 +1490,6 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
 
         restore_board();
 
-        // return early if time is up
-        if (abs(test) == NO_VALUE) {
-            return NO_VALUE;
-        }
         if (score >= beta) {
             // ADD mask ply check here to avoid segfaults
             if (!decode_capture(move) && ply < MAX_PLY) {
@@ -1484,6 +1511,7 @@ int Skunk::negamax(int alpha, int beta,int depth, t_line *pline) {
         if (score > alpha) {
             alpha = score;
 
+            if (UCI_PVSSearchMode) found_principle_variation = true;
             // write the move to our PV line
             if (pline != NULL) {
                 pline->argmove[0] = move;
@@ -1524,7 +1552,7 @@ int Skunk::check_time() {
 }
 
 // the top level call to get the best move
-int Skunk::search(int maxDepth, int print_stats) {
+int Skunk::search(int maxDepth) {
 
     /*
      * Think about making this multithreaded ? Split up each move amongst a seperate thread. Constraints:
@@ -1541,7 +1569,7 @@ int Skunk::search(int maxDepth, int print_stats) {
     start_time = std::chrono::steady_clock::now();
 
     int depth;
-    for (depth = 1; depth < maxDepth; depth++) {
+    for (depth = 1; depth <= maxDepth; depth++) {
         quiesence_moves = 0;
         nodes=0;
         cache_miss = 0;
@@ -1549,18 +1577,22 @@ int Skunk::search(int maxDepth, int print_stats) {
         ply = 0;
         pline.cmove = 0;
 
-        negamax(-INT_MIN + 1, INT_MAX, depth, &pline);
+        int score = negamax(-INT_MIN + 1, INT_MAX, depth, &pline);
 
-        if (print_stats) {
+        previous_pv_line = pline;
+
+        if (UCI_AnalysisMode)
+        {
+            printf("info score cp %d depth %d nodes %d time 0 multipv %d pv ", score, depth, nodes, depth);
             for (int i=0; i<pline.cmove; i++) {
-                printf("%-2s-%-2s-> ", square_to_coordinate[decode_source(pline.argmove[i])], square_to_coordinate[decode_destination(pline.argmove[i])]);
+                // loop over the moves within a PV line
+                // print PV move
+                print_move(pline.argmove[i]);
+                printf(" ");
             }
             printf("\n");
         }
     }
-
-    printf("Depth: %d\n", depth);
-    if (print_stats) printf("Nodes: %d\nCache Hits:%d\n", nodes + quiesence_moves, cache_hit);
 
 //    print_move(line.argmove[0]);
 //    printf("Score: %d\n", best);
@@ -1570,12 +1602,7 @@ int Skunk::search(int maxDepth, int print_stats) {
 
 //    printf("Principle Variation Moves (Expected Line)\n");
 //
-//    for (int i=0; i<pline.cmove; i++) {
-//        printf("# %-4d %-2s %-2s | ", pline.argmove[0], square_to_coordinate[decode_source(pline.argmove[i])], square_to_coordinate[decode_destination(pline.argmove[i])]);
-//    }
 
-//    printf("\n");
-    print_move(pline.argmove[0]);
     return pline.argmove[0];
 }
 
@@ -1628,140 +1655,84 @@ int Skunk::coordinate_to_square(char *coordinate) {
     return -1;
 }
 
-
-void Skunk::dual(int depth, int milli_sleep) {
-
-
-    int move = search(depth, false);
-
-
-    make_move(move, all_moves);
-
-
-    print_board();
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(milli_sleep));
-
-
-
-    if (is_checkmate()) {
-        printf("Checkmated!\n");
-        exit(1);
-    }
-
-    move = search(depth, false);
-
-
-    make_move(move, all_moves);
-
-    // play one move and then sleep
-    if (is_checkmate())  {
-        printf("Checkmated!\n");
-        exit(1);
-    }
-
-    print_board();
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(milli_sleep));
-
-    dual(depth, milli_sleep);
+void Skunk::parse_option(char *command) {
+    // Not implemented
 }
 
-void Skunk::play(int difficulty) {
-    // repeatedly play best move then wait for user to play move
+void Skunk::parse_go(char *command) {
+    int depth = 7;
+    char *current_depth = NULL;
+    if ((current_depth = strstr(command, "depth"))) {
+        depth = atoi(current_depth + 6);
+    }
 
-        print_board();
-
-        printf("Computer is thinking...");
-
-        // now let the bot make a move
-        int move = search(difficulty, false);
-
-        make_move(move, all_moves);
-
-        print_board();
-
-        play_person();
-
-        if (is_checkmate()) {
-            printf("Checkmate!");
-            exit(1);
-        }
-
-        play(difficulty);
+    int move = search(depth);
+    printf("bestmove ");
+    print_move(move);
+    printf("\n");
 }
 
-void Skunk::play_person() {
-    t_moves moves_list;
-    generate_moves(moves_list);
-
-
-    // get user input
-    char s[4], d[4];
-    int source=-1, destination=1; // real source destination
-    printf("enter square to move (source): ");
-    scanf("%3s", s);
-
-    int castle = 0;
-    if (s[2] == '-') {
-        castle = 1;
-    }
-    s[2] = '\0';
-    source = coordinate_to_square(s);
-
-
-    printf("enter square to move to (destination): ");
-    scanf("%3s", d);
-    destination = coordinate_to_square(d);
-
-    if (source == -1 || destination == -1) {
-        printf("The entered coords are not valid!\n");
-        return play_person();
-    }
-
-    // get the piece on the square
-    int piece = -1;
-    for (int i=P; i<=k; i++) {
-        if (get_bit(bitboards[i], source)) {
-            piece = i;
-            break;
+void Skunk::parse_position(char *command) {
+    /*
+     * command looks something like "position startpos" or "position fen <fen>"
+     */
+    command += 9;
+    char *current_char = command;
+    if (strncmp(command, "startpos", 8) == 0) {
+        parse_fen(fen_start);
+    } else {
+        current_char = strstr(command, "fen");
+        if (current_char == NULL) {
+            parse_fen(fen_start);
+        } else {
+            current_char += 4;
+            parse_fen(current_char);
         }
     }
 
-    if (piece == -1) {
-        printf("No piece on that square!\n");
-    }
+    current_char = strstr(command, "moves");
 
-    int capture = 0;
-    for (int i=P; i<= k; i++) {
-        if (get_bit(bitboards[i], destination)) {
-            capture = 1;
-            break;
+    if (current_char != NULL) {
+        current_char += 6;
+        while (*current_char) {
+            int move = parse_move(current_char);
+            if (move == 0) {
+                break;
+            }
+            make_move(move, all_moves);
+            while (*current_char && *current_char != ' ') current_char ++;
+            current_char ++;
         }
     }
+    print_board();
+}
 
 
-    int move = encode_move(source, destination, piece, 0, capture, 0, 0, castle);
+int Skunk::parse_move(char *move_string) {
+    t_moves moves;
+    generate_moves(moves);
 
+    if (strlen(move_string) < 4) return 0;
 
-    int valid = 0;
-    for (int i=0; i<moves_list.count; i++) {
-        if (decode_source(move) == decode_source(moves_list.moves[i])
-            && decode_destination(move) == decode_destination(moves_list.moves[i])) {
-            valid  = 1;
-            break;
+    int source = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8;
+    int target = (move_string[2] - 'a') + (8 - (move_string[3] - '0')) * 8;
+    for (int i=0; i<moves.count; i++) {
+        int move = moves.moves[i];
+        if (decode_source(move)==source && decode_destination(move)==target) {
+            int promoted = decode_promoted(move);
+            // check if it is a promotion or not
+            if (promoted) { // there is a promoted piece available
+                if (move_string[4]=='r' && (promoted==r || promoted==R)) return move;
+                if (move_string[4]=='b' && (promoted==b || promoted==B)) return move;
+                if (move_string[4]=='q' && (promoted==q || promoted==Q)) return move;
+                if (move_string[4]=='n' && (promoted==n || promoted==N)) return move;
+                continue;
+            }
+
+            return move;
         }
     }
-
-    if (!valid) return play_person();
-
-    copy_board();
-    if (!make_move(move, all_moves)) {
-        printf("Invalid move!\n");
-        return play_person();
-    }
-
-//    print_move(move);
+    return 0;
 }
 
 perft perft_results;
@@ -1831,6 +1802,16 @@ void Skunk::perft_test_helper(int depth) {
 
         restore_board();
     }
+}
+
+int Skunk::is_repitition() {
+    int seen = 0;
+    for (int i=repitition.count - 1; i>=0; i--) {
+        if (repitition.table[i] == zobrist) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
  int Skunk::make_move(int move, int move_flag) {
@@ -1969,6 +1950,7 @@ void Skunk::perft_test_helper(int depth) {
             restore_board();
             return 0;
         }
+
         return 1;
     } else {
         // call make_move recursively
@@ -1982,9 +1964,11 @@ void Skunk::perft_test_helper(int depth) {
 
 
 void Skunk::print_move(int move) {
-    printf("Move: %-2c %-4s->%-4s\n",
-           ascii_pieces[decode_piece(move)],
-           square_to_coordinate[decode_source(move)],
-           square_to_coordinate[decode_destination(move)]
-    );
+    if (decode_promoted(move))
+        printf("%s%s%c", square_to_coordinate[decode_source(move)],
+               square_to_coordinate[decode_destination(move)],
+               char_pieces[decode_promoted(move)]);
+    else
+        printf("%s%s", square_to_coordinate[decode_source(move)],
+               square_to_coordinate[decode_destination(move)]);
 }
