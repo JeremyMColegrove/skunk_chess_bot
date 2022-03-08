@@ -63,7 +63,7 @@ CMAKE_BINARY_DIR = /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-bui
 # Directory level rules for the build root directory
 
 # The main recursive "all" target.
-all: CMakeFiles/BitBot.dir/all
+all: CMakeFiles/Skunk.dir/all
 .PHONY : all
 
 # The main recursive "preinstall" target.
@@ -71,34 +71,34 @@ preinstall:
 .PHONY : preinstall
 
 # The main recursive "clean" target.
-clean: CMakeFiles/BitBot.dir/clean
+clean: CMakeFiles/Skunk.dir/clean
 .PHONY : clean
 
 #=============================================================================
-# Target rules for target CMakeFiles/BitBot.dir
+# Target rules for target CMakeFiles/Skunk.dir
 
 # All Build rule for target.
-CMakeFiles/BitBot.dir/all:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/depend
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles --progress-num=1,2,3 "Built target BitBot"
-.PHONY : CMakeFiles/BitBot.dir/all
+CMakeFiles/Skunk.dir/all:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/depend
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --progress-dir=/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles --progress-num=1,2,3 "Built target Skunk"
+.PHONY : CMakeFiles/Skunk.dir/all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/BitBot.dir/rule: cmake_check_build_system
+CMakeFiles/Skunk.dir/rule: cmake_check_build_system
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles 3
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/BitBot.dir/all
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/Skunk.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles 0
-.PHONY : CMakeFiles/BitBot.dir/rule
+.PHONY : CMakeFiles/Skunk.dir/rule
 
 # Convenience name for target.
-BitBot: CMakeFiles/BitBot.dir/rule
-.PHONY : BitBot
+Skunk: CMakeFiles/Skunk.dir/rule
+.PHONY : Skunk
 
 # clean rule for target.
-CMakeFiles/BitBot.dir/clean:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/clean
-.PHONY : CMakeFiles/BitBot.dir/clean
+CMakeFiles/Skunk.dir/clean:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/clean
+.PHONY : CMakeFiles/Skunk.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

@@ -117,24 +117,24 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named BitBot
+# Target rules for targets named Skunk
 
 # Build rule for target.
-BitBot: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 BitBot
-.PHONY : BitBot
+Skunk: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 Skunk
+.PHONY : Skunk
 
 # fast build rule for target.
-BitBot/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/build
-.PHONY : BitBot/fast
+Skunk/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/build
+.PHONY : Skunk/fast
 
 board.o: board.cpp.o
 .PHONY : board.o
 
 # target to build an object file
 board.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/board.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/board.cpp.o
 .PHONY : board.cpp.o
 
 board.i: board.cpp.i
@@ -142,7 +142,7 @@ board.i: board.cpp.i
 
 # target to preprocess a source file
 board.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/board.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/board.cpp.i
 .PHONY : board.cpp.i
 
 board.s: board.cpp.s
@@ -150,7 +150,7 @@ board.s: board.cpp.s
 
 # target to generate assembly for a file
 board.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/board.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/board.cpp.s
 .PHONY : board.cpp.s
 
 main.o: main.cpp.o
@@ -158,7 +158,7 @@ main.o: main.cpp.o
 
 # target to build an object file
 main.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/main.cpp.o
 .PHONY : main.cpp.o
 
 main.i: main.cpp.i
@@ -166,7 +166,7 @@ main.i: main.cpp.i
 
 # target to preprocess a source file
 main.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/main.cpp.i
 .PHONY : main.cpp.i
 
 main.s: main.cpp.s
@@ -174,7 +174,7 @@ main.s: main.cpp.s
 
 # target to generate assembly for a file
 main.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/BitBot.dir/build.make CMakeFiles/BitBot.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/main.cpp.s
 .PHONY : main.cpp.s
 
 # Help Target
@@ -185,7 +185,7 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... BitBot"
+	@echo "... Skunk"
 	@echo "... board.o"
 	@echo "... board.i"
 	@echo "... board.s"

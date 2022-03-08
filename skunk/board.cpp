@@ -4,6 +4,8 @@
 
 #include "board.h"
 #include <iostream>
+#include <poll.h>
+
 /*****************************\
 ===============================
          initialization
@@ -1251,16 +1253,32 @@ int Skunk::is_check() {
     return is_square_attacked(get_ls1b_index(bitboards[side==white?K:k]), side^1);
 }
 
+void Skunk::write_hash_entry(int score, int depth, int move, int flag) {
+#ifdef TRANSPOSITION_TABLE
+    t_entry  *entry = &transposition_table[zobrist % HASH_SIZE];
+
+    // adjust mating scores
+    if (score < -CHECKMATE + 1000) score -= ply;
+    if (score > CHECKMATE - 1000) score += ply;
+
+    entry->score = score;
+    entry->depth = depth;
+    entry->hash = zobrist;
+    entry->move = move;
+    entry->flags = flag;
+#endif
+}
+
 int Skunk::quiesence(int alpha, int beta, int depth) {
 
     nodes ++;
 
+    if (force_stop) return 0;
+
     // check if we should return or not
-//    if (nodes % time_check_node_interval == 0) {
-//        if (check_time()) {
-//            return NO_VALUE;
-//        }
-//    }
+    if (nodes % time_check_node_interval == 0) {
+        communicate();
+    }
 
     int evaluation = evaluate();
 
@@ -1325,14 +1343,16 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
     nodes ++ ;
 
     // check if we should return or not
-//    if (nodes % time_check_node_interval == 0) {
-//        if (check_time()) {
-//            return NO_VALUE;
-//        }
-//    }
+    if (nodes % time_check_node_interval == 0) {
+        communicate();
+    }
+
+    if (force_stop) return 0;
+
+
 
     /*
-     * Check for repetitions (does not work?)
+     * Check for repetitions (does not work for some reason?)
      */
     if (ply && is_repitition()) {
         return 0;
@@ -1345,7 +1365,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
      */
     if (depth == 0) {
         if (pline != NULL) pline->cmove = 0;
-        int evaluation = quiesence(alpha, beta, 8); // limit quiescence search to depth 8
+        int evaluation = quiesence(alpha, beta, 8); // limit quiescence search to depth 8 (currently it does not limit)
         return evaluation;
     }
 
@@ -1372,7 +1392,16 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
      * If we find an exact value and the ply is 1, we need to send move to principle variation line
      */
     t_entry *entry = &transposition_table[zobrist % HASH_SIZE];
-    if (entry->hash == zobrist && entry->depth>=depth) {
+
+    int is_pv = (beta - alpha) > 1;
+
+    if (entry->hash == zobrist && entry->depth>=depth && !is_pv) {
+        int score = entry->score;
+
+        // adjust mating scores
+        if (score < -CHECKMATE + 1000) score += ply;
+        if (score > CHECKMATE - 1000) score -= ply;
+
         switch (entry->flags) {
             case HASH_EXACT:
                 cache_hit++;
@@ -1402,7 +1431,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
          */
         if (alpha >= beta) {
             cache_hit++;
-            return entry->score;
+            return score;
         }
     }
 #endif
@@ -1445,9 +1474,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
 
     sort_moves(moves_list);
 
-    int valid_moves = 0;
-
-    int found_principle_variation = false;
+    int searched_moves = 0;
 
     int best = 0;
 
@@ -1476,24 +1503,23 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
         /*
          * If we have not eval a node yet, we do so here
          */
-        if (valid_moves == 0) {
-            test = -negamax(-beta, -alpha, depth -1, DO_NULL, pline);
+        if (searched_moves == 0) {
+            test = -negamax(-beta, -alpha, depth -1, DO_NULL, &line);
         } else {
             // LMR
-            if (valid_moves > 3 && depth > 2 && !check && decode_capture(move)==0 && decode_promoted(move)==0) {
-                test = -negamax(-alpha - 1, -alpha, depth - 2, DO_NULL, pline);
-            } else test = alpha + 1; // make sure to do the PVS
+            if (searched_moves > 3 && depth > 2 && !check && decode_capture(move) == 0 && decode_promoted(move) == 0) {
+                test = -negamax(-alpha - 1, -alpha, depth - 2, DO_NULL, NULL);
+            } else test = alpha + 1;
 
-            // PVS search
-            if (test>alpha) {
-                test = -negamax(-alpha - 1, -alpha, depth - 1, DO_NULL, pline);
-                if (test > alpha && test < beta) test = -negamax(-beta, -alpha, depth - 1, DO_NULL, pline);
+            // PVS
+            if (test > alpha)
+            {
+                test = -negamax(-alpha - 1, -alpha, depth - 1, DO_NULL, NULL);
+                if (test > alpha && test < beta) test = -negamax(-beta, -alpha, depth - 1, DO_NULL, &line);
             }
         }
 
-
-
-        valid_moves ++;
+        searched_moves ++;
         ply --;
         repitition.count--;
 
@@ -1504,7 +1530,17 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
 
         restore_board();
 
+        if (score > alpha) {
+            alpha = score;
+            // write the move to our PV line
+            if (pline != NULL) {
+                pline->argmove[0] = move;
+                memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
+                pline->cmove = line.cmove + 1;
+            }
+        }
 
+        // beta cutoff
         if (score >= beta) {
             // ADD mask ply check here to avoid segfaults
             if (!decode_capture(move) && ply < MAX_PLY) {
@@ -1513,60 +1549,31 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
                 killer_moves[0][ply] = move;
             }
 
-#ifdef TRANSPOSITION_TABLE
-            entry->score = beta;
-            entry->flags = HASH_LOWERBOUND;
-            entry->depth = depth;
-            entry->hash = zobrist;
-            entry->move = best;
-#endif
+            write_hash_entry(beta, depth, best, HASH_LOWERBOUND);
+
             return beta;
-        }
-
-
-        if (score > alpha) {
-            alpha = score;
-
-            // write the move to our PV line
-            if (pline != NULL) {
-                pline->argmove[0] = move;
-                memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
-                pline->cmove = line.cmove + 1;
-            }
         }
     }
 
-    // check for checkmate or stalemate only if no beta cuttoff
-    if (valid_moves == 0 ) {
+    // check for checkmate or stalemate
+    if (searched_moves == 0 ) {
         if (check)
             score = (-CHECKMATE + ply);
         else score = 0;
     }
 
 
-#ifdef TRANSPOSITION_TABLE
     /*
      * We update our transposition table entry to reflect current score of node, etc.
      */
-    entry->score = score;
-    if (score <= _alpha) {
-        entry->flags = HASH_UPPERBOUND;
-    } else if (score >= beta) {
-        entry->flags = HASH_LOWERBOUND;
-    } else entry->flags = HASH_EXACT;
-    entry->depth = depth;
-    entry->hash = zobrist;
-    entry->move = best;
-#endif
+    int flag = HASH_EXACT;
+    if (score <= _alpha) flag = HASH_UPPERBOUND;
+    else if (score >= beta) flag = HASH_LOWERBOUND;
+    write_hash_entry(score, depth, best, flag);
 
     return score;
 }
 
-int Skunk::check_time() {
-    if(std::chrono::steady_clock::now() - start_time > std::chrono::seconds(2))
-        return 1;
-    return 0;
-}
 
 // the top level call to get the best move
 int Skunk::search(int maxDepth) {
@@ -1581,11 +1588,13 @@ int Skunk::search(int maxDepth) {
     memset(history_moves, 0, sizeof(history_moves));
 
     // iterate through deepening as we go
-    t_line pline;
+    t_line pline = {.cmove = 0};
 
     start_time = std::chrono::steady_clock::now();
 
-    int depth;
+    force_stop = 0;
+
+    int score, depth;
     for (depth = 1; depth <= maxDepth; depth++) {
         quiesence_moves = 0;
         nodes=0;
@@ -1594,31 +1603,32 @@ int Skunk::search(int maxDepth) {
         ply = 0;
         pline.cmove = 0;
 
-        int score = negamax(-INT_MIN + 1, INT_MAX, depth, DO_NULL, &pline);
 
-        previous_pv_line = pline;
+        score = negamax(-INT_MIN + 1, INT_MAX, depth, DO_NULL, &pline);
 
-        if (UCI_AnalysisMode)
-        {
-            printf("info score cp %d depth %d nodes %d time 0 multipv %d pv ", score, depth, nodes, depth);
-            for (int i=0; i<pline.cmove; i++) {
-                // loop over the moves within a PV line
-                // print PV move
-                print_move(pline.argmove[i]);
-                printf(" ");
-            }
-            printf("\n");
-        }
+        if (!force_stop) previous_pv_line = pline;
+        else break;
+
+
     }
 
-//    print_move(line.argmove[0]);
-//    printf("Score: %d\n", best);
+    if (UCI_AnalyseMode)
+    {
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
+        printf("info score cp %d depth %d nodes %d time %lld pv ", score, depth - 1, nodes + quiesence_moves, elapsed);
+        for (int i=0; i<previous_pv_line.cmove; i++) {
+            // loop over the moves within a PV line
+            // print PV move
+            print_move(previous_pv_line.argmove[i]);
+            printf(" ");
+        }
+        printf("\n");
+    }
 
-    // print out stats about the search
-//    printf("Run Stats\n%-15s\t%-15s\t%-15s\t%-15s\t%-10s\n%-15d\t%-15d\t%-15d\t%-15d\t%-10d\n", "TT Hits", "TT Misses","Depth","Best Score","Nodes", cache_hit, cache_miss, maxDepth, best, nodes);
-
-//    printf("Principle Variation Moves (Expected Line)\n");
-//
+    printf("bestmove ");
+    print_move(previous_pv_line.argmove[0]);
+    printf("\n");
 
     return pline.argmove[0];
 }
@@ -1672,21 +1682,91 @@ int Skunk::coordinate_to_square(char *coordinate) {
     return -1;
 }
 
+
+// what will stop the search and use the PV line
+void Skunk::communicate() {
+
+    /*
+     * If the search is move_time, check if
+     */
+    if (search_type == SEARCH_MOVETIME) {
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
+
+        if (elapsed > UCI_DefaultDuration) {
+            force_stop = 1;
+            return ;
+        }
+    }
+
+    /*
+     * Polls stdin to see if there is any data to read
+     */
+    struct pollfd fd;
+
+    fd.fd = STDIN_FILENO;
+    fd.events = POLLIN;
+    fd.revents = 0;
+    int is_ready = (poll(&fd, 1, 0)>0 && ((fd.revents & POLLIN) != 0));
+
+    // checks if it is ready
+    if (!is_ready) return;
+
+    char input[20];
+    if (fgets(input, 20, stdin) && input[0] != '\n') {
+        // got some data in input, lets parse it
+        if (strncmp(input, "quit", 4)==0) {
+            force_stop = 1;
+        } else if (strncmp(input, "stop", 4)==0) {
+            force_stop = 1;
+        }
+    }
+    fflush(stdin);
+}
+
 void Skunk::parse_option(char *command) {
     // Not implemented
+    // get the name
+    if ((command = strstr(command, "name"))) {
+        command += 5;
+        // get the value command
+        if (strncmp(command, "UCI_AnalyseMode", 15) == 0 && (command = strstr(command, "value"))) {
+            command += 6;
+
+        }
+        else if (strncmp(command, "UCI_DefaultDepth", 16) == 0 && (command = strstr(command, "value"))) {
+            command += 6;
+            UCI_DefaultDepth = strtol(command, NULL, 10);//atoi(current_char);
+        }
+        else if (strncmp(command, "UCI_DefaultDuration", 19) == 0 && (command = strstr(command, "value"))) {
+            command += 6;
+            UCI_DefaultDuration = strtol(command, NULL, 10);
+        }
+    }
+}
+
+
+
+void Skunk::parse_debug(char *command) {
+    // not implemented
+
 }
 
 void Skunk::parse_go(char *command) {
-    int depth = 8;
-    char *current_depth = NULL;
-    if ((current_depth = strstr(command, "depth"))) {
-        depth = atoi(current_depth + 6);
+    int depth = UCI_DefaultDepth;
+    int duration = UCI_DefaultDuration;
+    char *current_char = NULL;
+    if ((current_char = strstr(command, "depth"))) {
+        search_type = SEARCH_DEPTH;
+        current_char += 6;
+        depth = strtol(current_char, NULL, 10);
+    } else if ((current_char = strstr(command, "movetime"))) {
+        current_char += 9;
+        search_type = SEARCH_MOVETIME;
+        UCI_DefaultDuration = strtol(current_char, NULL, 10);
     }
 
-    int move = search(depth);
-    printf("bestmove ");
-    print_move(move);
-    printf("\n");
+    search(search_type==SEARCH_DEPTH?depth:INT_MAX);
 }
 
 void Skunk::parse_position(char *command) {
@@ -1721,7 +1801,6 @@ void Skunk::parse_position(char *command) {
             current_char ++;
         }
     }
-    print_board();
 }
 
 

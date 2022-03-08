@@ -73,6 +73,9 @@
 #define HASH_UPPERBOUND 2
 
 
+#define SEARCH_DEPTH 0
+#define SEARCH_MOVETIME 1
+
 
 
 #define copy_board() \
@@ -602,17 +605,29 @@ public:
     int score_to_tt(int score, int ply);
     int score_from_tt(int score, int ply);
     void clear_transposition_tables();
+    void write_hash_entry(int score, int depth, int move, int flag);
     // time functions to incorporate time checking
     int check_time();
     std::chrono::steady_clock::time_point start_time;
 
     // UCI commands/helper functions
+    void communicate();
     int parse_move(char *move_string);
     void parse_position(char *command);
     void parse_go(char *command);
     void parse_option(char *command);
+    void parse_debug(char *command);
     char *fen_start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    int UCI_AnalysisMode = 1;
+    int force_stop = 0;
+    int search_type = SEARCH_MOVETIME;
+    int wtime = 0;
+    int btime = 0;
+    int winc = 0;
+    int binc = 0;
+    int UCI_DefaultDepth = 7;
+    int UCI_DebugMode = 0;
+    int UCI_DefaultDuration = 2000; // default time to search in milliseconds
+    int UCI_AnalyseMode = 1;
 private:
     void perft_test_helper(int depth);
 
