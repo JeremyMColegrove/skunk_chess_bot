@@ -13,122 +13,270 @@
 \*****************************/
 
 void Skunk::parse_fen(char *fen) {
-    // get the length of the string
-    size_t fen_length = strlen(fen);
-    // reset the occupancies
-    memset(occupancies, 0ULL, sizeof(occupancies));
-    // reset the bitboards
+//
+//    // get the length of the string
+//    size_t fen_length = strlen(fen);
+//    // reset the occupancies
+//    memset(occupancies, 0ULL, sizeof(occupancies));
+//    // reset the bitboards
+//    memset(bitboards, 0ULL, sizeof(bitboards));
+//    // reset the side
+//    side = white;
+//    // reset castling
+//    castle = 0;
+//    // reset enpassant
+//    enpassant = no_square;
+//    // init index of current fen character
+//    int index = 0;
+//    // loop through fen until space is hit
+//    for (int square=0; index < strlen(fen); index++)
+//    {
+//        // get the fen letter
+//        char c = fen[index];
+//        // if it is a space, we are done parsing fen
+//        if (c == ' ') break;
+//        // if it is a newline just continue
+//        if (c == '/') {
+//            // move on to the next letter
+//            continue;
+//        }
+//
+//        //if the fen is a digit
+//        if (std::isdigit(c))
+//        {
+//            // convert char to integer and move forward that many spaces
+//            square += c - '0';
+//            continue;
+//        }
+//
+//        // get the piece number
+//        int piece = char_pieces[c];
+//
+//        piece_count[piece] ++;
+//
+//        // set the bit on the correct bitboard
+//        set_bit(bitboards[piece], square);
+//
+//        square ++;
+//    }
+//
+//    // bypass all spaces
+//    while (index<fen_length && fen[++index]==' ' );
+//    // check if end of string
+//    if (index == fen_length) return init();
+//
+//
+//    //we have made it to the parsing of the sides
+//
+//    // get which side
+//    if (fen[index++] == 'w') side = white; else side = black;
+//
+//    // bypass all spaces
+//    while (index<fen_length && fen[++index]==' ' );
+//    // check if end of string
+//    if (index == fen_length) return init();
+//
+//    bool space_encountered = false;
+//
+//    // check white castle king side
+//    if (fen[index++] == 'K' && !space_encountered) {
+//        printf("We have castle rights on K side\n");
+//
+//        castle |= wk;
+//    }
+//
+//    space_encountered = space_encountered || fen[index] == ' ';
+//
+//    // check white castle queen side
+//    if (!space_encountered && fen[index++] == 'Q') {
+//        printf("We have castle rights on Q side\n");
+//
+//        castle |= wq;
+//    }
+//
+//    space_encountered = space_encountered || fen[index] == ' ';
+//
+//    // check black castle king side
+//    if (!space_encountered && fen[index++] == 'k') {
+//        printf("We have castle rights on k side\n");
+//
+//        castle |= bk;
+//    }
+//
+//    space_encountered = space_encountered || fen[index] == ' ';
+//
+//    // check black castle queen side
+//    if (!space_encountered && fen[index++] == 'q') {
+//        printf("We have castle rights on q side\n");
+//
+//        castle |= bq;
+//    }
+//
+//    // bypass all spaces
+//    while (index < fen_length && fen[++index]==' ');
+//    // check if end of string
+//    if (index == fen_length) return init();
+//
+//    // if there is an en passant
+//    if (fen[index] != '-') {
+//        // get the file
+//        int file = fen[index++] - 'a';
+//        // get the rank
+//        int rank = 8 - (fen[index++] - '0');
+//        // convert to square
+//        enpassant = rank * 8 + file;
+//    }
+//
+//    // bypass all spaces
+//    while (index < fen_length && fen[++index]==' ');
+//    // check if end of string
+//    if (index == fen_length) return init();
+//
+//    //get the number of half t_moves
+////    half_moves = fen[index++] - '0';
+//
+//    // bypass all spaces
+//    while (index < fen_length && fen[++index]==' ');
+//    // check if end of string
+//    if (index == fen_length) return init();
+//
+//    full_moves = fen[index++] - '0';
+//
+////     check if end of string
+//    if (index == fen_length) return init();
+//
+//    full_moves = full_moves*10 + fen[index] - '0';
+//
+//    init();
+// reset board position (bitboards)
     memset(bitboards, 0ULL, sizeof(bitboards));
-    // reset the side
-    side = white;
-    // reset castling
-    castle = 0;
-    // reset enpassant
+
+    // reset occupancies (bitboards)
+    memset(occupancies, 0ULL, sizeof(occupancies));
+
+    // reset game state variables
+    side = 0;
     enpassant = no_square;
-    // init index of current fen character
-    int index = 0;
-    // loop through fen until space is hit
-    for (int square=0; index < strlen(fen); index++)
+    castle = 0;
+
+    // loop over board ranks
+    for (int rank = 0; rank < 8; rank++)
     {
-        // get the fen letter
-        char c = fen[index];
-        // if it is a space, we are done parsing fen
-        if (c == ' ') break;
-        // if it is a newline just continue
-        if (c == '/') {
-            // move on to the next letter
-            continue;
-        }
-
-        //if the fen is a digit
-        if (std::isdigit(c))
+        // loop over board files
+        for (int file = 0; file < 8; file++)
         {
-            // convert char to integer and move forward that many spaces
-            square += c - '0';
-            continue;
+            // init current square
+            int square = rank * 8 + file;
+
+            // match ascii pieces within FEN string
+            if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z'))
+            {
+                // init piece type
+                int piece = char_pieces[*fen];
+
+                // set piece on corresponding bitboard
+                set_bit(bitboards[piece], square);
+
+                // increment pointer to FEN string
+                fen++;
+            }
+
+            // match empty square numbers within FEN string
+            if (*fen >= '0' && *fen <= '9')
+            {
+                // init offset (convert char 0 to int 0)
+                int offset = *fen - '0';
+
+                // define piece variable
+                int piece = -1;
+
+                // loop over all piece bitboards
+                for (int bb_piece = P; bb_piece <= k; bb_piece++)
+                {
+                    // if there is a piece on current square
+                    if (get_bit(bitboards[bb_piece], square))
+                        // get piece code
+                        piece = bb_piece;
+                }
+
+                // on empty current square
+                if (piece == -1)
+                    // decrement file
+                    file--;
+
+                // adjust file counter
+                file += offset;
+
+                // increment pointer to FEN string
+                fen++;
+            }
+
+            // match rank separator
+            if (*fen == '/')
+                // increment pointer to FEN string
+                fen++;
         }
-
-        // get the piece number
-        int piece = char_pieces[c];
-        // switch (piece) {
-        //     case ''
-        // }
-
-        // set the bit on the correct bitboard
-        set_bit(bitboards[piece], square);
-        square ++;
     }
 
-    // bypass all spaces
-    while (index<fen_length && fen[++index]==' ' );
-    // check if end of string
-    if (index == fen_length) return init();
+    // got to parsing side to move (increment pointer to FEN string)
+    fen++;
 
+    // parse side to move
+    (*fen == 'w') ? (side = white) : (side = black);
 
-    //we have made it to the parsing of the sides
+    // go to parsing castling rights
+    fen += 2;
 
-    // get which side
-    if (fen[index++] == 'w') side = white; else side = black;
+    // parse castling rights
+    while (*fen != ' ')
+    {
+        switch (*fen)
+        {
+            case 'K': castle |= wk; break;
+            case 'Q': castle |= wq; break;
+            case 'k': castle |= bk; break;
+            case 'q': castle |= bq; break;
+            case '-': break;
+        }
 
-    // bypass all spaces
-    while (index<fen_length && fen[++index]==' ' );
-    // check if end of string
-    if (index == fen_length) return init();
+        // increment pointer to FEN string
+        fen++;
+    }
 
-    bool space_encountered = false;
+    // got to parsing enpassant square (increment pointer to FEN string)
+    fen++;
 
-    // check white castle king side
-    if (fen[index++] == 'K' && !space_encountered) castle |= wk;
+    // parse enpassant square
+    if (*fen != '-')
+    {
+        // parse enpassant file & rank
+        int file = fen[0] - 'a';
+        int rank = 8 - (fen[1] - '0');
 
-    space_encountered = space_encountered || fen[index] == ' ';
-
-    // check white castle queen side
-    if (!space_encountered && fen[index++] == 'Q') castle |= wq;
-
-    space_encountered = space_encountered || fen[index] == ' ';
-
-    // check black castle king side
-    if (!space_encountered && fen[index++] == 'k') castle |= bk;
-
-    space_encountered = space_encountered || fen[index] == ' ';
-
-    // check black castle queen side
-    if (!space_encountered && fen[index++] == 'q') castle |= bq;
-
-    // bypass all spaces
-    while (index < fen_length && fen[++index]==' ');
-    // check if end of string
-    if (index == fen_length) return init();
-
-    // if there is an en passant
-    if (fen[index] != '-') {
-        // get the file
-        int file = fen[index++] - 'a';
-        // get the rank
-        int rank = 8 - (fen[index++] - '0');
-        // convert to square
+        // init enpassant square
         enpassant = rank * 8 + file;
     }
 
-    // bypass all spaces
-    while (index < fen_length && fen[++index]==' ');
-    // check if end of string
-    if (index == fen_length) return init();
+        // no enpassant square
+    else
+        enpassant = no_square;
 
-    //get the number of half t_moves
-//    half_moves = fen[index++] - '0';
+    // loop over white pieces bitboards
+    for (int piece = P; piece <= K; piece++)
+        // populate white occupancy bitboard
+        occupancies[white] |= bitboards[piece];
 
-    // bypass all spaces
-    while (index < fen_length && fen[++index]==' ');
-    // check if end of string
-    if (index == fen_length) return init();
+    // loop over black pieces bitboards
+    for (int piece = p; piece <= k; piece++)
+        // populate white occupancy bitboard
+        occupancies[black] |= bitboards[piece];
 
-    full_moves = fen[index++] - '0';
+    // init all occupancies
+    occupancies[both] |= occupancies[white];
+    occupancies[both] |= occupancies[black];
 
-//     check if end of string
-    if (index == fen_length) return init();
-
-    full_moves = full_moves*10 + fen[index] - '0';
+    // init hash key
+    zobrist = generate_zobrist();
 
     init();
 }
@@ -232,6 +380,7 @@ void Skunk::clear_transposition_tables() {
     memset(transposition_table, 0ULL, sizeof(t_entry) * HASH_SIZE);
 #endif
 }
+
 int Skunk::score_to_tt(int score, int ply)
 {
     return score;//(score > CHECKMATE-1000) ? score + ply : (score < -CHECKMATE+1000) ? score - ply : score;
@@ -1258,8 +1407,8 @@ void Skunk::write_hash_entry(int score, int depth, int move, int flag) {
     t_entry  *entry = &transposition_table[zobrist % HASH_SIZE];
 
     // adjust mating scores
-    if (score < -CHECKMATE + 1000) score -= ply;
-    if (score > CHECKMATE - 1000) score += ply;
+//    if (score < -CHECKMATE + 1000) score += ply;
+//    if (score > CHECKMATE - 1000) score -= ply;
 
     entry->score = score;
     entry->depth = depth;
@@ -1338,7 +1487,7 @@ int Skunk::quiesence(int alpha, int beta, int depth) {
 
 
 
-int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
+int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_line *pline) {
 
     nodes ++ ;
 
@@ -1355,7 +1504,8 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
      * Check for repetitions (does not work for some reason?)
      */
     if (ply && is_repitition()) {
-        return 0;
+        printf("Repititon found\n");
+        return -evaluate()*0.1; // instead of returning just a draw score, include a contempt factor (simply evaluate x weight). If white is losing, we want to draw so invert eval
     }
 
     /*
@@ -1363,16 +1513,12 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
      * Here we need to set the number of moves in our PV to 0 so that when collapsing up the tree the number of moves in cmove is correct
      * (otherwise it could have too large of a number from a previous search and segfault)
      */
-    if (depth == 0) {
+    if (depth < 1) {
         if (pline != NULL) pline->cmove = 0;
         int evaluation = quiesence(alpha, beta, 8); // limit quiescence search to depth 8 (currently it does not limit)
         return evaluation;
     }
 
-    /*
-     * // BUG FIXED:
-     * Make sure to set cmove to 0 because otherwise it may allocate the struct but not assign a value. This can cause a segfault on some systems
-     */
     t_line line = {.cmove = 0 };
     int score = INT_MIN;
     int check = is_check();
@@ -1397,10 +1543,6 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
 
     if (entry->hash == zobrist && entry->depth>=depth && !is_pv) {
         int score = entry->score;
-
-        // adjust mating scores
-        if (score < -CHECKMATE + 1000) score += ply;
-        if (score > CHECKMATE - 1000) score -= ply;
 
         switch (entry->flags) {
             case HASH_EXACT:
@@ -1436,11 +1578,35 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
     }
 #endif
 
+    int fail_high = 0;
+#ifdef VERIFIED_NULL_MOVE
+    if (!check && (!verify || depth > 1) && do_null == DO_NULL) {
+        // make null move
+        copy_board();
+        side ^= 1;
+        zobrist ^= side_key;
+        if (enpassant != no_square) zobrist ^= enpassant_keys[enpassant];
+        enpassant = no_square;
+        int score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, verify, NO_NULL, NULL);
+        side ^= 1;
+        restore_board();
+
+        if (score >= beta) {
+            if (verify) {
+                verify = 0;
+                depth--;
+                fail_high = 1;
+            } else {
+                return score;
+            }
+        }
+    }
+#endif
 #ifdef NULL_MOVE
     /*
      * Lets do some null move pruning here to see if our opponent has a response to this move
      */
-    if (do_null && !check && ply && depth >= NULL_R + 1) {
+    if (do_null==DO_NULL && !check && ply && depth >= NULL_R + 1) {
         // switch sides
         copy_board();
         side ^= 1;
@@ -1451,10 +1617,11 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
          * Here we make a call to negamax again, so our opponent makes two moves in a row.
          * We do not want this move to contribute to our PV, so we pass null in for that arg
          */
-        int score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, NO_NULL, NULL);
+        int score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, verify, NO_NULL, NULL);
         side ^= 1;
         restore_board();
         if (score >= beta) {
+//            depth -= NULL_R;
             return  beta;
         }
     }
@@ -1495,40 +1662,47 @@ int Skunk::negamax(int alpha, int beta,int depth, int do_null, t_line *pline) {
 
 
         ply ++;
-        repitition.count ++;
-        repitition.table[repitition.count] = zobrist;
+        repitition.table[repitition.count++] = zobrist;
 
         int test;
 
         /*
          * If we have not eval a node yet, we do so here
          */
+        search:
         if (searched_moves == 0) {
-            test = -negamax(-beta, -alpha, depth -1, DO_NULL, &line);
+            test = -negamax(-beta, -alpha, depth -1, verify, DO_NULL, &line);
         } else {
             // LMR
             if (searched_moves > 3 && depth > 2 && !check && decode_capture(move) == 0 && decode_promoted(move) == 0) {
-                test = -negamax(-alpha - 1, -alpha, depth - 2, DO_NULL, NULL);
+                test = -negamax(-alpha - 1, -alpha, depth - 2, verify, NO_NULL, NULL);
             } else test = alpha + 1;
 
             // PVS
             if (test > alpha)
             {
-                test = -negamax(-alpha - 1, -alpha, depth - 1, DO_NULL, NULL);
-                if (test > alpha && test < beta) test = -negamax(-beta, -alpha, depth - 1, DO_NULL, &line);
+                test = -negamax(-alpha - 1, -alpha, depth - 1, verify,NO_NULL, NULL);
+                if (test > alpha && test < beta) test = -negamax(-beta, -alpha, depth - 1, verify,DO_NULL, &line);
             }
         }
-
-        searched_moves ++;
-        ply --;
-        repitition.count--;
-
         if (test > score) {
             score = test;
             best = move;
         }
 
+        // check if zugzwang is detected, if so, re-search with increased depth
+        if (fail_high && score < beta) {
+            depth++;
+            fail_high = false;
+            verify = 1;
+            goto search;
+        }
+
+
         restore_board();
+        searched_moves ++;
+        ply --;
+        repitition.count--;
 
         if (score > alpha) {
             alpha = score;
@@ -1604,19 +1778,29 @@ int Skunk::search(int maxDepth) {
         pline.cmove = 0;
 
 
-        score = negamax(-INT_MIN + 1, INT_MAX, depth, DO_NULL, &pline);
+        int test = negamax(-INT_MIN + 1, INT_MAX, depth, 1, DO_NULL, &pline);
 
-        if (!force_stop) previous_pv_line = pline;
+        if (!force_stop) {
+            previous_pv_line = pline;
+            score = test;
+        }
         else break;
-
-
     }
 
     if (UCI_AnalyseMode)
     {
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
-        printf("info score cp %d depth %d nodes %d time %lld pv ", score, depth - 1, nodes + quiesence_moves, elapsed);
+
+        if (score < -CHECKMATE + 2000) {
+            printf("info score mate %d depth %d nodes %d time %lld pv ", -(score + CHECKMATE) / 2 - 1, depth - 1, nodes + quiesence_moves, elapsed);
+        } else if (score > CHECKMATE - 2000) {
+            printf("info score mate %d depth %d nodes %d time %lld pv ", (CHECKMATE - score) / 2 + 1, depth - 1, nodes + quiesence_moves, elapsed);
+        } else {
+            printf("info score cp %d depth %d nodes %d time %lld pv ", score, depth - 1, nodes + quiesence_moves, elapsed);
+        }
+
+
         for (int i=0; i<previous_pv_line.cmove; i++) {
             // loop over the moves within a PV line
             // print PV move
@@ -1628,6 +1812,7 @@ int Skunk::search(int maxDepth) {
 
     printf("bestmove ");
     print_move(previous_pv_line.argmove[0]);
+    repitition.table[repitition.count++] = previous_pv_line.argmove[0]; // add this move into repetition table
     printf("\n");
 
     return pline.argmove[0];
@@ -1789,6 +1974,7 @@ void Skunk::parse_position(char *command) {
 
     current_char = strstr(command, "moves");
 
+
     if (current_char != NULL) {
         current_char += 6;
         while (*current_char) {
@@ -1797,6 +1983,7 @@ void Skunk::parse_position(char *command) {
                 break;
             }
             make_move(move, all_moves);
+            repitition.table[repitition.count++] = zobrist;
             while (*current_char && *current_char != ' ') current_char ++;
             current_char ++;
         }
@@ -1871,6 +2058,8 @@ void Skunk::perft_test_helper(int depth) {
 
         copy_board();
 
+
+
         if (!make_move(move, all_moves)) {
             continue;
         }
@@ -1893,16 +2082,20 @@ void Skunk::perft_test_helper(int depth) {
 
         perft_results.nodes[depth] ++;
 
+        print_board();
+        getchar();
+
         perft_test_helper(depth - 1);
 
+        print_board();
+        getchar();
 
         restore_board();
     }
 }
 
 int Skunk::is_repitition() {
-    int seen = 0;
-    for (int i=repitition.count - 1; i>=0; i--) {
+    for (int i = repitition.count - 2; i>=0; i-=2) {
         if (repitition.table[i] == zobrist) {
             return 1;
         }
@@ -1938,11 +2131,12 @@ int Skunk::is_repitition() {
             for (int piece = start_piece; piece < end_piece; piece++) {
                 if (get_bit(bitboards[piece], target)) {
                     // remove piece from bitboard
-
 #ifdef DEBUG
                     assert(piece != K && piece != k);
 #endif
                     pop_bit(bitboards[piece], decode_destination(move));
+
+                    piece_count[piece] --;
 
                     // remove the piece from the board hash
                     zobrist ^= piece_keys[piece][target];
@@ -1951,19 +2145,26 @@ int Skunk::is_repitition() {
             }
         }
         if (promoted) {
-            pop_bit(bitboards[side == white ? P : p], target);
+            int piece = (side == white ? P : p);
+
+            pop_bit(bitboards[piece], target);
+
+            piece_count[piece];
+
             set_bit(bitboards[promoted], target);
-            zobrist ^= piece_keys[side == white ? P : p][target];
+            zobrist ^= piece_keys[piece][target];
             zobrist ^= piece_keys[promoted][target];
         }
+
         if (enp) {
             if (side == white) {
                 pop_bit(bitboards[p], target + 8);
+                piece_count[p] --;
                 zobrist ^= piece_keys[p][target + 8];
             } else {
                 pop_bit(bitboards[P], target - 8);
+                piece_count[P] --;
                 zobrist ^= piece_keys[P][target - 8];
-
             }
         }
 
@@ -2060,10 +2261,13 @@ int Skunk::is_repitition() {
 
 
 void Skunk::print_move(int move) {
-    if (decode_promoted(move))
+    int promoted = decode_promoted(move);
+    if (promoted) {
         printf("%s%s%c", square_to_coordinate[decode_source(move)],
                square_to_coordinate[decode_destination(move)],
-               char_pieces[decode_promoted(move)]);
+               ascii_pieces[promoted]);
+    }
+
     else
         printf("%s%s", square_to_coordinate[decode_source(move)],
                square_to_coordinate[decode_destination(move)]);

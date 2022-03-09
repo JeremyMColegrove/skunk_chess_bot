@@ -24,7 +24,8 @@
 // flag for enabling the transposition table
 #define TRANSPOSITION_TABLE
 // flag for enabling NULL MOVE in negamax
-#define NULL_MOVE
+//#define NULL_MOVE
+#define VERIFIED_NULL_MOVE
 
 
 //Some macros for getting and setting bits
@@ -555,6 +556,7 @@ public:
     U64 castle_keys[16];
     U64 side_key;
 
+    int piece_count[12];
     // killer t_moves
     int killer_moves[2][MAX_PLY];
     //history move source->destination (alternative could be piece->destination)
@@ -587,7 +589,7 @@ public:
     int evaluate();
     int null_ok();
     int search(int maxDepth);
-    int negamax(int alpha, int beta, int depth, int do_null, t_line *pline);
+    int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
     int quiesence(int alpha, int beta, int depth);
 
     int is_checkmate();
@@ -607,7 +609,6 @@ public:
     void clear_transposition_tables();
     void write_hash_entry(int score, int depth, int move, int flag);
     // time functions to incorporate time checking
-    int check_time();
     std::chrono::steady_clock::time_point start_time;
 
     // UCI commands/helper functions
@@ -619,14 +620,14 @@ public:
     void parse_debug(char *command);
     char *fen_start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;
-    int search_type = SEARCH_MOVETIME;
+    int search_type = SEARCH_DEPTH;
     int wtime = 0;
     int btime = 0;
     int winc = 0;
     int binc = 0;
-    int UCI_DefaultDepth = 7;
+    int UCI_DefaultDepth = 9;
     int UCI_DebugMode = 0;
-    int UCI_DefaultDuration = 2000; // default time to search in milliseconds
+    int UCI_DefaultDuration = 4000; // default time to search in milliseconds
     int UCI_AnalyseMode = 1;
 private:
     void perft_test_helper(int depth);
@@ -642,7 +643,6 @@ private:
     void construct_slider_attacks();
     void add_move(t_moves &moves_list, int move);
     void clear_moves();
-//    U64 occupancies[3];
     int side = white;
     int enpassant = no_square;
     int castle = 0;
