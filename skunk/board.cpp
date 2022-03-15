@@ -14,141 +14,6 @@
 \*****************************/
 
 void Skunk::parse_fen(char *fen) {
-//
-//    // get the length of the string
-//    size_t fen_length = strlen(fen);
-//    // reset the occupancies
-//    memset(occupancies, 0ULL, sizeof(occupancies));
-//    // reset the bitboards
-//    memset(bitboards, 0ULL, sizeof(bitboards));
-//    // reset the side
-//    side = white;
-//    // reset castling
-//    castle = 0;
-//    // reset enpassant
-//    enpassant = no_square;
-//    // init index of current fen character
-//    int index = 0;
-//    // loop through fen until space is hit
-//    for (int square=0; index < strlen(fen); index++)
-//    {
-//        // get the fen letter
-//        char c = fen[index];
-//        // if it is a space, we are done parsing fen
-//        if (c == ' ') break;
-//        // if it is a newline just continue
-//        if (c == '/') {
-//            // move on to the next letter
-//            continue;
-//        }
-//
-//        //if the fen is a digit
-//        if (std::isdigit(c))
-//        {
-//            // convert char to integer and move forward that many spaces
-//            square += c - '0';
-//            continue;
-//        }
-//
-//        // get the piece number
-//        int piece = char_pieces[c];
-//
-//        piece_count[piece] ++;
-//
-//        // set the bit on the correct bitboard
-//        set_bit(bitboards[piece], square);
-//
-//        square ++;
-//    }
-//
-//    // bypass all spaces
-//    while (index<fen_length && fen[++index]==' ' );
-//    // check if end of string
-//    if (index == fen_length) return init();
-//
-//
-//    //we have made it to the parsing of the sides
-//
-//    // get which side
-//    if (fen[index++] == 'w') side = white; else side = black;
-//
-//    // bypass all spaces
-//    while (index<fen_length && fen[++index]==' ' );
-//    // check if end of string
-//    if (index == fen_length) return init();
-//
-//    bool space_encountered = false;
-//
-//    // check white castle king side
-//    if (fen[index++] == 'K' && !space_encountered) {
-//        printf("We have castle rights on K side\n");
-//
-//        castle |= wk;
-//    }
-//
-//    space_encountered = space_encountered || fen[index] == ' ';
-//
-//    // check white castle queen side
-//    if (!space_encountered && fen[index++] == 'Q') {
-//        printf("We have castle rights on Q side\n");
-//
-//        castle |= wq;
-//    }
-//
-//    space_encountered = space_encountered || fen[index] == ' ';
-//
-//    // check black castle king side
-//    if (!space_encountered && fen[index++] == 'k') {
-//        printf("We have castle rights on k side\n");
-//
-//        castle |= bk;
-//    }
-//
-//    space_encountered = space_encountered || fen[index] == ' ';
-//
-//    // check black castle queen side
-//    if (!space_encountered && fen[index++] == 'q') {
-//        printf("We have castle rights on q side\n");
-//
-//        castle |= bq;
-//    }
-//
-//    // bypass all spaces
-//    while (index < fen_length && fen[++index]==' ');
-//    // check if end of string
-//    if (index == fen_length) return init();
-//
-//    // if there is an en passant
-//    if (fen[index] != '-') {
-//        // get the file
-//        int file = fen[index++] - 'a';
-//        // get the rank
-//        int rank = 8 - (fen[index++] - '0');
-//        // convert to square
-//        enpassant = rank * 8 + file;
-//    }
-//
-//    // bypass all spaces
-//    while (index < fen_length && fen[++index]==' ');
-//    // check if end of string
-//    if (index == fen_length) return init();
-//
-//    //get the number of half t_moves
-////    half_moves = fen[index++] - '0';
-//
-//    // bypass all spaces
-//    while (index < fen_length && fen[++index]==' ');
-//    // check if end of string
-//    if (index == fen_length) return init();
-//
-//    full_moves = fen[index++] - '0';
-//
-////     check if end of string
-//    if (index == fen_length) return init();
-//
-//    full_moves = full_moves*10 + fen[index] - '0';
-//
-//    init();
 // reset board position (bitboards)
     memset(bitboards, 0ULL, sizeof(bitboards));
 
@@ -1778,7 +1643,7 @@ int Skunk::search(int maxDepth) {
         pline.cmove = 0;
 
 
-        int test = negamax(-INT_MIN + 1, INT_MAX, depth, 1, DO_NULL, &pline);
+        int test = negamax(-(INT_MIN + 1), INT_MAX, depth, 1, DO_NULL, &pline);
 
         // only use odd depths, for some reason even depths are slightly weaker
         if (force_stop) break;
@@ -1796,11 +1661,11 @@ int Skunk::search(int maxDepth) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
 
         if (score < -CHECKMATE + 2000) {
-            printf("info score mate %d depth %d nodes %d time %lld pv ", -(score + CHECKMATE) / 2 - 1, useable_depth, nodes + quiesence_moves, elapsed);
+            printf("info score mate %d depth %d nodes %d time %ld pv ", -(score + CHECKMATE) / 2 - 1, useable_depth, nodes + quiesence_moves, elapsed);
         } else if (score > CHECKMATE - 2000) {
-            printf("info score mate %d depth %d nodes %d time %lld pv ", (CHECKMATE - score) / 2 + 1, useable_depth, nodes + quiesence_moves, elapsed);
+            printf("info score mate %d depth %d nodes %d time %ld pv ", (CHECKMATE - score) / 2 + 1, useable_depth, nodes + quiesence_moves, elapsed);
         } else {
-            printf("info score cp %d depth %d nodes %d time %lld pv ", score, useable_depth, nodes + quiesence_moves, elapsed);
+            printf("info score cp %d depth %d nodes %d time %ld pv ", score, useable_depth, nodes + quiesence_moves, elapsed);
         }
 
 

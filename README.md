@@ -20,7 +20,7 @@
 ### The easiest way to get started with Skunk bot:
 - open terminal
 - navigate to Chess/skunk_chess_bot/skunk
-- run ``cmake`` which should generate Makefile
+- run ``cmake .`` which should generate Makefile
 - run ``make`` to compile the bot to your machine
 - Open a chess GUI such as ChessX, open arena, etc.
 - Follow software instructions on how to load UCI engine into your GUI
