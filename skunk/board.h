@@ -590,7 +590,7 @@ public:
     int null_ok();
     int search(int maxDepth);
     int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
-    int quiesence(int alpha, int beta, int depth);
+    int quiesence(int alpha, int beta);
 
     int is_checkmate();
     int is_check();
@@ -611,6 +611,10 @@ public:
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
 
+    // evaluation commands
+
+
+
     // UCI commands/helper functions
     void communicate();
     int parse_move(char *move_string);
@@ -618,6 +622,7 @@ public:
     void parse_go(char *command);
     void parse_option(char *command);
     void parse_debug(char *command);
+    void parse_perft(char *command);
     char *fen_start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;
     int search_type = SEARCH_DEPTH;
@@ -625,9 +630,9 @@ public:
     int btime = 0;
     int winc = 0;
     int binc = 0;
-    int UCI_DefaultDepth = 9;
+    int UCI_DefaultDepth = 7;
     int UCI_DebugMode = 0;
-    int UCI_DefaultDuration = 4000; // default time to search in milliseconds
+    int UCI_DefaultDuration = 8000; // default time to search in milliseconds
     int UCI_AnalyseMode = 1;
 private:
     void perft_test_helper(int depth);

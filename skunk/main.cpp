@@ -75,7 +75,7 @@ void parse_command(char *input, Skunk *skunk) {
     } else if (strncmp(input, "go", 2)==0) {
         skunk->parse_go(input);
     } else if (strncmp(input, "uci", 3)==0) {
-        printf("id name NineLayer\n"
+        printf("id name Skunk\n"
                "id author Jeremy Colegrove\n"
                "option name UCI_AnalyseMode type spin default true\n"
                "option name UCI_DefaultDepth type spin default 7\n"
@@ -86,6 +86,6 @@ void parse_command(char *input, Skunk *skunk) {
     } else if (strncmp(input, "debug", 5)==0) {
         skunk->parse_debug(input);
     } else if (strncmp(input, "perft", 5)==0) {
-        skunk->perft_test(1);
+        skunk->parse_perft(input);
     }
 }
