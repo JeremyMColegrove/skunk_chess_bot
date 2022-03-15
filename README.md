@@ -1,7 +1,26 @@
-# skunk_chess_bot
-A combination of Javascript chess engine bots, and a C bitboard chess engine (in progress!)
+# Skunk Bot
+###Contains:
+- Custom chess GUI
+- Rudimentary javascript minimax bot
+- Rudimentary javascript montey carlo bot
+- C bitboard bot (Skunk bot ~1800 ELO)
 
-### The easiest way to get started is to:
-- Clone the repo
-- Host the index.html on a server (easiest way is to install VSCode extension "Live Server" and hit Go Live!)
-- Play chess! You can modify the engines / parameters in sketch.js initGame() method!
+###C Bitboard bot has implemented:
+- Negamax
+- History moves
+- Killer moves
+- Transposition table (Always replacement strategy)
+- Quiescence search
+- Check extensions
+- LVA/MVV
+- PV move ordering
+- Verified Null-Move pruning
+- UCI compatible
+
+### The easiest way to get started with Skunk bot:
+- open terminal
+- navigate to Chess/skunk_chess_bot/skunk
+- run ``cmake`` which should generate Makefile
+- run ``make`` to compile the bot to your machine
+- Open a chess GUI such as ChessX, open arena, etc.
+- Follow software instructions on how to load UCI engine into your GUI
