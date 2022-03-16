@@ -1643,7 +1643,7 @@ int Skunk::search(int maxDepth) {
         pline.cmove = 0;
 
 
-        int test = negamax(-(INT_MIN + 1), INT_MAX, depth, 1, DO_NULL, &pline);
+        int test = negamax(INT_MIN + 1, INT_MAX, depth, 1, DO_NULL, &pline);
 
         // only use odd depths, for some reason even depths are slightly weaker
         if (force_stop) break;

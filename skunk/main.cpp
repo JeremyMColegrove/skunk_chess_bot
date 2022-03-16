@@ -19,7 +19,11 @@ t_commands split_command(char *command, char * seperator);
 
 
 int main(int argc, char **argv) {
-    uci_loop();
+//    uci_loop();
+    Skunk skunk; // init the skunk
+    skunk.parse_fen(skunk.fen_start);
+//    skunk.search(9);
+    skunk.perft_test(6);
     return 0;
 }
 
