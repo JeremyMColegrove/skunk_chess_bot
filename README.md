@@ -1,11 +1,11 @@
 # Skunk Bot
-###Contains:
+### Contains:
 - Custom chess GUI
 - Rudimentary javascript minimax bot
 - Rudimentary javascript montey carlo bot
 - C bitboard bot (Skunk bot ~1800 ELO)
 
-###C Bitboard bot has implemented:
+### C Bitboard bot has implemented:
 - Negamax
 - History moves
 - Killer moves
