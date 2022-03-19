@@ -40,7 +40,13 @@
 //Turns the bit at square to 0
 #define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
 
+// pops off the ls1b. This is a faster operation that pop_bit so use this whenever you can
+#define pop_lsb(bitboard) (bitboard &= (bitboard-1))
+
 //encodes a move
+/* | castling enp d_push capture promoted piece  dest   source
+ * | 0        0   0      0000    0000     000000 000000 000000
+ */
 #define encode_move(source, destination, piece, promoted, capture, double_push, enpassant, castling) \
     (source) |                                                                                  \
     (destination << 6) |                                                                        \
@@ -231,12 +237,28 @@ typedef struct {
 } perft;
 
 typedef struct {
+    int count;
+    U64 ray;
+} t_attackers;
+
+typedef struct {
     U64 table[500];
     int count;
 } t_repitition;
 
 class Skunk {
 public:
+    const int lsb_64_table[64] =
+            {
+                    63, 30,  3, 32, 59, 14, 11, 33,
+                    60, 24, 50,  9, 55, 19, 21, 34,
+                    61, 29,  2, 53, 51, 23, 41, 18,
+                    56, 28,  1, 43, 46, 27,  0, 35,
+                    62, 31, 58,  4,  5, 49, 54,  6,
+                    15, 52, 12, 40,  7, 42, 45, 16,
+                    25, 57, 48, 13, 10, 39,  8, 44,
+                    20, 47, 38, 22, 17, 37, 36, 26
+            };
     const char *square_to_coordinate[64] = {
             "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8",
             "a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7",
@@ -576,19 +598,20 @@ public:
     U64 zobrist = 0ULL;
     t_line previous_pv_line;
 
-    int is_repitition();
-    U64 construct_bishop_attacks(int square, U64 blockers);
-    U64 construct_rook_attacks(int square, U64 blockers);
-    U64 get_rook_attacks(int square, U64 occupancy);
-    U64 get_bishop_attacks(int square, U64 occupancy);
-    U64 get_queen_attacks(int square, U64 occupancy);
-    int is_square_attacked(int square, int side);
+    inline int is_repitition();
+    inline U64 construct_bishop_attacks(int square, U64 blockers);
+    inline U64 construct_rook_attacks(int square, U64 blockers);
+    inline U64 get_rook_attacks(int square, U64 occupancy);
+    inline U64 get_bishop_attacks(int square, U64 occupancy);
+    inline U64 get_queen_attacks(int square, U64 occupancy);
+    inline int is_square_attacked(int square, int side);
+    inline U64 get_atttacked_squares();
     int bit_count(U64 board);
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
-    void fill_occupancies();
-    void generate_moves(t_moves &moves_list);
-    int make_move(int move, int move_flag);
+    inline void fill_occupancies();
+    inline void generate_moves(t_moves &moves_list);
+    inline int make_move(int move, int move_flag);
     void perft_test(int depth);
     int evaluate();
     int null_ok();
