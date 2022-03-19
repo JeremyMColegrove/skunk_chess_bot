@@ -1,3 +1,0 @@
-/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/edit_cache.dir
-/Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug/CMakeFiles/Skunk.dir

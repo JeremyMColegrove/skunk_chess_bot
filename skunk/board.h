@@ -24,10 +24,10 @@
 // flag for enabling asserts in the code for debugging and error checking i.e. zobrist key checking
 //#define DEBUG
 // flag for enabling the transposition table
-//#define TRANSPOSITION_TABLE
+#define TRANSPOSITION_TABLE
 // flag for enabling NULL MOVE in negamax
 //#define NULL_MOVE
-//#define VERIFIED_NULL_MOVE
+#define VERIFIED_NULL_MOVE
 
 
 //Some macros for getting and setting bits

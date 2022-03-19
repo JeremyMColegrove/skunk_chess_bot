@@ -1298,8 +1298,7 @@ int Skunk::quiesence(int alpha, int beta) {
 
     generate_moves(moves_list);
 
-    // include tempo
-    int evaluation = evaluate();// + log(moves_list.count) * 2;
+    int evaluation = evaluate();
 
     if (evaluation >= beta) {
         return evaluation;
@@ -1614,11 +1613,6 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 // the top level call to get the best move
 int Skunk::search(int maxDepth) {
 
-    /*
-     * Think about making this multithreaded ? Split up each move amongst a seperate thread. Constraints:
-     * 1) TT synchronization is expensive, maybe each thread gets their own smaller TT?
-     */
-
     memset(killer_moves, 0, sizeof(killer_moves));
 
     memset(history_moves, 0, sizeof(history_moves));
@@ -1645,11 +1639,10 @@ int Skunk::search(int maxDepth) {
         // only use odd depths, for some reason even depths are slightly weaker
         if (force_stop) break;
 
-        if (depth % 2 == 1) {
-            previous_pv_line = pline;
-            score = test;
-            useable_depth = depth;
-        }
+        previous_pv_line = pline;
+        score = test;
+        useable_depth = depth;
+        // save the pv line
     }
 
     if (UCI_AnalyseMode)

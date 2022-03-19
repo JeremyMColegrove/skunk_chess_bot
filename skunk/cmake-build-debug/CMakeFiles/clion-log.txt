@@ -1,4 +1,0 @@
-/Applications/CLion.app/Contents/bin/cmake/mac/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk
--- Configuring done
--- Generating done
--- Build files have been written to: /Users/jeremy/Documents/Chess/skunk_chess_bot/skunk/cmake-build-debug
