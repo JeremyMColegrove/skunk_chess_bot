@@ -61,6 +61,8 @@
 #define decode_double(move) ((move) & 0x200000)
 #define decode_enpassant(move) ((move) & 0x400000)
 #define decode_castle(move) ((move) & 0x800000)
+
+
 #define flip_square(sq) (sq ^ 56)
 #define MAX_PLY 72
 #define CHECKMATE 500000
@@ -217,6 +219,7 @@ typedef struct {
 } t_entry;
 
 typedef struct {
+    long long int total_nodes;
     int nodes[MAX_PERFT_DEPTH]; // handle up to 24 levels
     int captures[MAX_PERFT_DEPTH];
     int castles[MAX_PERFT_DEPTH];

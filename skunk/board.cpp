@@ -1144,20 +1144,12 @@ void Skunk::generate_moves(t_moves &moves_list)
             }
         }
     }
-
-    // at the very end, sort the moves
-
 }
 
 void Skunk::add_move(t_moves &moves_list, int move) {
     // check if it is a legal move
-    copy_board();
-    make_move(move, all_moves);
-    if (!is_square_attacked((side == white) ? get_ls1b_index(bitboards[k]) : get_ls1b_index(bitboards[K]), side)) {
-        moves_list.moves[moves_list.count] = move;
-        moves_list.count++;
-    }
-    restore_board();
+    moves_list.moves[moves_list.count] = move;
+    moves_list.count++;
 }
 
 
@@ -1307,7 +1299,7 @@ int Skunk::quiesence(int alpha, int beta) {
     generate_moves(moves_list);
 
     // include tempo
-    int evaluation = evaluate() + log(moves_list.count) * 2;
+    int evaluation = evaluate();// + log(moves_list.count) * 2;
 
     if (evaluation >= beta) {
         return evaluation;
@@ -1321,14 +1313,15 @@ int Skunk::quiesence(int alpha, int beta) {
 
     int score = INT_MIN;
 
+    copy_board();
 
     for (int i=0; i<moves_list.count; i++) {
 
         int move = moves_list.moves[i];
 
-        copy_board();
 
         if (!make_move(move, only_captures)) {
+            restore_board();
             continue;
         }
 
@@ -1388,6 +1381,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 
     t_line line = {.cmove = 0 };
     int score = INT_MIN;
+
     int check = is_check();
     // increase the depth if we are in check, don't want to miss any tactics
     if (check) depth ++;
@@ -1494,9 +1488,6 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
     }
 #endif
 
-
-
-
    /*
     * Here we actually loop through all of our moves and make each one, checking if it is valid, and doing it
     * Maybe quiescence search can use this same negamax function with different flag?
@@ -1511,15 +1502,17 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
     int searched_moves = 0;
 
     int best = 0;
-    copy_board();
 
     // loop through each move
     for (int i = 0; i<moves_list.count; i++) {
 
         int move = moves_list.moves[i];
 
+        copy_board();
 
-        make_move(move, all_moves);
+        if (!make_move(move, all_moves)) {
+            continue;
+        }
 
 #ifdef DEBUG
         assert(zobrist == generate_zobrist());
@@ -1597,8 +1590,9 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 
     // check for checkmate or stalemate
     if (searched_moves == 0 ) {
-        if (check)
+        if (check) {
             score = (-CHECKMATE + ply);
+        }
         else score = 0;
     }
 
@@ -1712,7 +1706,7 @@ int Skunk::evaluate() {
                 case R: score += rook_score[square]; break;
                 case K: score += king_score[square]; break;
 
-                    // evaluate black pieces
+                // evaluate black pieces
                 case p: score -= pawn_score[mirror_score[square]]; break;
                 case n: score -= knight_score[mirror_score[square]]; break;
                 case b: score -= bishop_score[mirror_score[square]]; break;
@@ -1909,13 +1903,16 @@ perft perft_results;
 
 void Skunk::perft_test(int depth) {
     printf("Starting PERFT test...\n");
-    memset(perft_results.nodes, 0, sizeof(perft_results.nodes));
-    memset(perft_results.captures, 0, sizeof(perft_results.captures));
-    memset(perft_results.castles, 0, sizeof(perft_results.castles));
-    memset(perft_results.promotions, 0, sizeof(perft_results.promotions));
+    memset(&perft_results, 0, sizeof(perft));
 
-
+    perft_results.total_nodes = 0;
+    auto start = std::chrono::steady_clock::now();
     perft_test_helper(depth);
+    auto end = std::chrono::steady_clock::now();
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    int per_second = perft_results.total_nodes/elapsed;
 
     printf("%-10s\t%-10s\t%-10s\t%-10s\t%-10s\n", "depth", "nodes", "captures", "castles", "promoted");
 
@@ -1927,7 +1924,7 @@ void Skunk::perft_test(int depth) {
                perft_results.castles[i+1],
                perft_results.promotions[i+1]);
     }
-
+    printf("Nodes: %lld\nSeconds: %f\nNPS: %d\n", perft_results.total_nodes, (float)elapsed/1000, per_second*1000);
 }
 
 
@@ -1946,7 +1943,9 @@ void Skunk::perft_test_helper(int depth) {
 
         int  move = moves_list.moves[move_count];
 
-        make_move(move, all_moves);
+        if (!make_move(move, all_moves)) {
+            continue;
+        }
 
         // check if the hashes are the same
 #ifdef DEBUG
@@ -1965,7 +1964,7 @@ void Skunk::perft_test_helper(int depth) {
         }
 
         perft_results.nodes[depth] ++;
-
+        perft_results.total_nodes ++;
         perft_test_helper(depth - 1);
 
 
@@ -1985,6 +1984,7 @@ int Skunk::is_repitition() {
  int Skunk::make_move(int move, int move_flag) {
 //
     if (move_flag == all_moves) {
+        copy_board();
         // make a move
 
         int source = decode_source(move);
@@ -2119,6 +2119,10 @@ int Skunk::is_repitition() {
 
         zobrist ^= side_key;
 
+        if (is_square_attacked((side == white) ? get_ls1b_index(bitboards[k]) : get_ls1b_index(bitboards[K]), side)) {
+            restore_board();
+            return 0;
+        }
         return 1;
     } else {
         // call make_move recursively
