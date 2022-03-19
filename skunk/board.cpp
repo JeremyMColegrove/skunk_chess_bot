@@ -719,7 +719,6 @@ U64 Skunk::set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
 U64 Skunk::get_atttacked_squares() {
     U64 attacks = 0ULL;
     U64 pieces;
-    U64 mask;
     int pawn = P, knight=N, bishop=B, rook=R, queen=Q, king=K;
     if (side == white) {
         pawn = p, knight=n, bishop=b, rook=r, queen=q, king=k;
@@ -728,9 +727,7 @@ U64 Skunk::get_atttacked_squares() {
     // calculate white pawn attacks
     pieces = bitboards[pawn];
     while (pieces) {
-        mask = pawn_masks[side^1][get_ls1b_index(pieces)];
-        attacks |= mask;
-
+        attacks |= pawn_masks[side^1][get_ls1b_index(pieces)];
         pop_lsb(pieces);
     }
 
@@ -784,28 +781,31 @@ void Skunk::generate_moves(t_moves &moves_list)
     // init move count
     moves_list.count = 0;
 
+    // init variables
+    // try and leverage faster registers by using one variable, trying to keep this variable in reg rather than swapping for each piece
+    U64 pieces = 0ULL;
+    U64 attacked_squares;
     /******************************************\
      *
      *                  KING MOVES
      *
     \******************************************/
-    // try and leverage faster registers by using one variable, trying to keep this variable in reg rather than swapping for each piece
-    U64 pieces = 0ULL;
-    U64 attacked_squares;
 
 
-    // check which king
-    int king = side == white?K:k;
+    // get the right pieces
+    int pawn = P, knight=N, bishop=B, rook=R, queen=Q, king=K;
+    U64 *opponent_bitboards=bitboards+6;
+    if (side == black) {
+        pawn = p, knight=n, bishop=b, rook=r, queen=q, king=k;
+        opponent_bitboards=bitboards;
+    }
+
     // make sure there are no pieces of same color, and the opponent is not attacking the square
-
-
     // the attacked_squares for the king is a little bit more complicated. We must remove the king from the board, then generate attacks
-    int king_square = get_ls1b_index(bitboards[king]);
 
-    pop_bit(bitboards[king], king_square);
+    int king_square = get_ls1b_index(bitboards[king]);
     pop_bit(occupancies[both], king_square);
     attacked_squares = get_atttacked_squares();
-    set_bit(bitboards[king], king_square);
     set_bit(occupancies[both], king_square);
 
     pieces = king_masks[get_ls1b_index(bitboards[king])] & ~occupancies[side] & ~attacked_squares;
@@ -817,10 +817,42 @@ void Skunk::generate_moves(t_moves &moves_list)
         pop_lsb(pieces);
     }
 
+    /******************************************\
+     *
+     *             INIT OTHER MOVES
+     *
+    \******************************************/
+
     // generate the attacked squares as normal after the king is done
     attacked_squares = get_atttacked_squares();
 
 
+    // calculate the capture mask (if a piece is giving check, a valid move is capturing the piece)
+
+    U64 capture_mask = 0ULL;
+    U64 push_mask    = 0ULL;
+
+    // get a bitboard with all attackers that have king in check on them
+    // do pawn first
+    capture_mask |= pawn_masks[side][king_square] & opponent_bitboards[P];
+    capture_mask |= get_bishop_attacks(king_square, occupancies[both]) & (opponent_bitboards[B] | opponent_bitboards[Q]);
+    capture_mask |= get_rook_attacks(king_square, occupancies[both]) & (opponent_bitboards[R] | opponent_bitboards[Q]);
+    capture_mask |= knight_masks[king_square] & opponent_bitboards[N];
+
+    // if no pieces are checking the king, then any move on the board is a valid move
+    if (capture_mask == 0) capture_mask = 0xFFFFFFFFFFFFFFFF;
+
+    // the capture mask contains how many pieces are checking the king. If more than one piece, the only valid moves are king moves. We can escape early here.
+    int bit = get_ls1b_index(capture_mask);
+    pop_lsb(capture_mask);
+    if (capture_mask > 0) {
+        return;
+    }
+    set_bit(capture_mask, bit);
+
+
+    // calculating the push mask (if a sliding piece is checking the king, a valid move is to block the piece)
+    
 
 }
 
@@ -829,7 +861,6 @@ void Skunk::add_move(t_moves &moves_list, int move) {
     moves_list.moves[moves_list.count] = move;
     moves_list.count++;
 }
-
 
 void Skunk::print_moves(t_moves &moves_list)
 {
