@@ -4,8 +4,9 @@
 
 #include "board.h"
 #include <iostream>
-#include <poll.h>
+
 #include <cmath>
+
 
 /*****************************\
 ===============================
@@ -642,7 +643,7 @@ void Skunk::print_board() {
             }
 
             // print different piece set depending on OS
-            #ifdef WIN64
+            #ifdef _WIN32
                         printf(" %c", (piece == -1) ? '.' : ascii_pieces[piece]);
             #else
                         printf(" %s ", (piece == -1) ? "." : unicode_pieces[piece]);
@@ -1333,7 +1334,7 @@ int Skunk::quiesence(int alpha, int beta) {
 
         int test = -quiesence(-beta, -alpha);
 
-        score = std::max(score, test);
+        score = (((score) > (test)) ? (score) : (test));
 
 #ifdef DEBUG
         assert(zobrist == generate_zobrist());
@@ -1359,7 +1360,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
     nodes ++ ;
 
     // check if we should return or not
-    if (nodes % time_check_node_interval == 0) {
+    if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
 
@@ -1605,10 +1606,12 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
     /*
      * We update our transposition table entry to reflect current score of node, etc.
      */
+#ifdef TRANSPOSITION_TABLE
     int flag = HASH_EXACT;
     if (score <= _alpha) flag = HASH_UPPERBOUND;
     else if (score >= beta) flag = HASH_LOWERBOUND;
     write_hash_entry(score, depth, best, flag);
+#endif
 
     return score;
 }
@@ -1755,12 +1758,22 @@ void Skunk::communicate() {
     /*
      * Polls stdin to see if there is any data to read
      */
-    struct pollfd fd;
 
+#ifdef _WIN32
+    struct timeval timeout;
+    timeout.tv_usec = 1;
+    timeout.tv_sec = 0;
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(0, &fds);
+    int is_ready = _kbhit();
+#else
+    struct pollfd fd;
     fd.fd = STDIN_FILENO;
     fd.events = POLLIN;
     fd.revents = 0;
     int is_ready = (poll(&fd, 1, 0)>0 && ((fd.revents & POLLIN) != 0));
+#endif
 
     // checks if it is ready
     if (!is_ready) return;

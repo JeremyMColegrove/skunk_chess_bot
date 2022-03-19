@@ -19,20 +19,16 @@ t_commands split_command(char *command, char * seperator);
 
 
 int main(int argc, char **argv) {
-//    uci_loop();
-    Skunk skunk; // init the skunk
-    skunk.parse_fen(skunk.fen_start);
-//    skunk.search(9);
-    skunk.perft_test(6);
+    uci_loop();
     return 0;
 }
 
 void uci_loop() {
     setbuf(stdin, NULL);
     setbuf(stdout, NULL);
-    char input[2000];
+    char input[200];
 
-    Skunk skunk; // init the skunk
+    Skunk *skunk = new Skunk();
 
     int stop = 0;
     while (!stop) {
@@ -44,14 +40,15 @@ void uci_loop() {
         if (!fgets(input, 2000, stdin) || input[0]=='\n')
             continue;
         // split the command here
-        t_commands commands = split_command(input, "\n\r");
+        t_commands commands = split_command(input, (char *)"\n\r");
         for (int i=0; i<commands.count; i++) {
             if  (strlen(commands.command[i]) > 3 && strncmp(commands.command[i], "quit", 4)==0) {
                 stop = 1;
             }
-            parse_command(commands.command[i], &skunk);
+            parse_command(commands.command[i], skunk);
         }
     }
+    delete skunk;
 }
 
 t_commands split_command(char *command, char *seperator) {

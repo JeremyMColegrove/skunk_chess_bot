@@ -11,9 +11,11 @@
 #include <chrono>
 #include <thread>
 #ifdef _WIN32
+#include <conio.h>
 #include <Windows.h>
 #else
 #include <unistd.h>
+#include <poll.h>
 #endif
 
 //Our bitboard type
@@ -22,10 +24,10 @@
 // flag for enabling asserts in the code for debugging and error checking i.e. zobrist key checking
 //#define DEBUG
 // flag for enabling the transposition table
-#define TRANSPOSITION_TABLE
+//#define TRANSPOSITION_TABLE
 // flag for enabling NULL MOVE in negamax
 //#define NULL_MOVE
-#define VERIFIED_NULL_MOVE
+//#define VERIFIED_NULL_MOVE
 
 
 //Some macros for getting and setting bits
@@ -397,9 +399,9 @@ public:
             0x4010011029020020ULL
     };
     // convert ASCII character pieces to encoded constants
-    
+#ifndef _WIN32
     char *unicode_pieces[12] = { "♙", "♘", "♗", "♖", "♕", "♔","♟︎", "♞", "♝", "♜", "♛", "♚" };
-
+#endif
 //     int char_pieces[12] = {P, N, B, R, Q, K, p, n, b, r, q, k};
 
         // must initialize these like char_pieces['P'] = Pw
@@ -567,7 +569,6 @@ public:
     // repitition array for 3 move repitition
     t_repitition repitition;
 
-    int time_check_node_interval = 50000;
 
     U64 zobrist = 0ULL;
     t_line previous_pv_line;
@@ -634,6 +635,8 @@ public:
     int UCI_DebugMode = 0;
     int UCI_DefaultDuration = 8000; // default time to search in milliseconds
     int UCI_AnalyseMode = 1;
+    int time_check_node_interval = 50000;
+
 private:
     void perft_test_helper(int depth);
 
