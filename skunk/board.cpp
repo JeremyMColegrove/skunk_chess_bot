@@ -178,6 +178,7 @@ Skunk::Skunk() {
     construct_bishop_tables();
     construct_rook_tables();
     construct_slider_attacks();
+    construct_rays();
 
 
     //reset our turn
@@ -321,6 +322,65 @@ Skunk::~Skunk() {
         delete[] transposition_table;
     }
 }
+// generate rays from source square to destination square for every square
+void Skunk::construct_rays() {
+    memset(rays, 0ULL, sizeof(rays));
+    int count = 0;
+    U64 ray = 0ULL;
+    for (int i=0; i<64; i++) {
+        // horizontal
+        int left_square = (i / 8)*8;
+        for (int j=left_square; j<i; j++) {
+            ray = 0ULL;
+            int square = j;
+            while (square < i-1) {
+                square++;
+                set_bit(ray, square);
+            }
+            rays[j][i] = ray;
+            rays[i][j] = ray;
+        }
+
+        // vertical
+        int top_square = i % 8;
+        for (int j=top_square; j<i; j+=8) {
+            ray = 0ULL;
+            int square = j;
+            while (square < i-8) {
+                square+=8;
+                set_bit(ray, square);
+            }
+            rays[i][j] = ray;
+            rays[j][i] = ray;
+        }
+
+        // diagonal se->nw
+        int l_diag = std::min(i % 8, i / 8);
+        for (int j = 1; j <= l_diag; j++ ) {
+            ray = 0ULL;
+            int square = i - 9 * (j-1);
+            while (square < i) {
+                set_bit(ray, square);
+                square += 9;
+            }
+            rays[i][i - 9 * j] = ray;
+            rays[i - 9 * j][i] = ray;
+        }
+
+        // diagonal sw->ne
+        int r_diag = std::min(7 - (i % 8), i / 8);
+        for (int j = 1; j <= r_diag; j++ ) {
+            ray = 0ULL;
+            int square = i - 7 * (j-1);
+            while (square < i) {
+                set_bit(ray, square);
+                square += 7;
+            }
+            rays[i][i - 7 * j] = ray;
+            rays[i - 7 * j][i] = ray;
+        }
+    }
+}
 
 void Skunk::construct_pawn_tables() {
     //Generate the pawn tables
@@ -401,7 +461,7 @@ void Skunk::construct_king_tables() {
 }
 
 void Skunk::construct_bishop_tables() {
-    //Generate the kings tables
+    //Generate the bishop tables
     for (int square=0; square<64; square++) {
         U64 attacks = 0UL;
 
@@ -785,6 +845,7 @@ void Skunk::generate_moves(t_moves &moves_list)
     // try and leverage faster registers by using one variable, trying to keep this variable in reg rather than swapping for each piece
     U64 pieces = 0ULL;
     U64 attacked_squares;
+    int destination;
     /******************************************\
      *
      *                  KING MOVES
@@ -800,7 +861,7 @@ void Skunk::generate_moves(t_moves &moves_list)
         opponent_bitboards=bitboards;
     }
 
-    // make sure there are no pieces of same color, and the opponent is not attacking the square
+    // make sure there are no pieces of same color, and the opponent is not attacking the destination
     // the attacked_squares for the king is a little bit more complicated. We must remove the king from the board, then generate attacks
 
     int king_square = get_ls1b_index(bitboards[king]);
@@ -811,7 +872,7 @@ void Skunk::generate_moves(t_moves &moves_list)
     pieces = king_masks[get_ls1b_index(bitboards[king])] & ~occupancies[side] & ~attacked_squares;
     // get all of the destinations for the king
     while (pieces) {
-        int destination = get_ls1b_index(pieces);
+        destination = get_ls1b_index(pieces);
         // encode the move
         moves_list.moves[moves_list.count++] = encode_move(get_ls1b_index(bitboards[king]), destination, king, 0, 0, 0, 0, 0);
         pop_lsb(pieces);
@@ -834,25 +895,64 @@ void Skunk::generate_moves(t_moves &moves_list)
 
     // get a bitboard with all attackers that have king in check on them
     // do pawn first
-    capture_mask |= pawn_masks[side][king_square] & opponent_bitboards[P];
     capture_mask |= get_bishop_attacks(king_square, occupancies[both]) & (opponent_bitboards[B] | opponent_bitboards[Q]);
     capture_mask |= get_rook_attacks(king_square, occupancies[both]) & (opponent_bitboards[R] | opponent_bitboards[Q]);
-    capture_mask |= knight_masks[king_square] & opponent_bitboards[N];
 
-    // if no pieces are checking the king, then any move on the board is a valid move
-    if (capture_mask == 0) capture_mask = 0xFFFFFFFFFFFFFFFF;
-
-    // the capture mask contains how many pieces are checking the king. If more than one piece, the only valid moves are king moves. We can escape early here.
-    int bit = get_ls1b_index(capture_mask);
-    pop_lsb(capture_mask);
-    if (capture_mask > 0) {
-        return;
+    // here we have our slider pieces, we can use these to fill our push mask before adding other pieces
+    U64 sliders = capture_mask;
+    while (sliders) {
+        destination = get_ls1b_index(sliders);
+        push_mask |= rays[destination][king_square];
+        pop_lsb(sliders);
     }
-    set_bit(capture_mask, bit);
 
 
-    // calculating the push mask (if a sliding piece is checking the king, a valid move is to block the piece)
+    capture_mask |= knight_masks[king_square] & opponent_bitboards[N];
+    capture_mask |= pawn_masks[side][king_square] & opponent_bitboards[P];
+
+
+    // if no pieces are checking the king, then any move on the board is a valid move and we do not check for early escape
+    if (capture_mask == 0) {
+
+        capture_mask = 0xFFFFFFFFFFFFFFFF;
+        push_mask = 0xFFFFFFFFFFFFFFFF;
+
+    } else {
+
+        // the capture mask contains how many pieces are checking the king.
+        // //If more than one piece, the only valid moves are king moves. We can escape early here.
+        int bit = get_ls1b_index(capture_mask);
+        pop_lsb(capture_mask);
+        if (capture_mask > 0) {
+            return;
+        }
+        set_bit(capture_mask, bit);
+
+    }
+
+    // calculate regular pawn pushes
+    if (side == white) {
+        pieces = bitboards[pawn] >> 8;
+    } else {
+        pieces = bitboards[pawn] << 8;
+    }
+
+    pieces &= ~occupancies[both] & push_mask;
     
+    while (pieces) {
+        destination = get_ls1b_index(pieces);
+        moves_list.moves[moves_list.count++] = encode_move(get_ls1b_index(bitboards[pawn]), destination, pawn, 0, 0, 0, 0, 0);
+        pop_lsb(pieces);
+    }
+
+    // now the sliding and capture masks are set, but now we have to add enpassant squares to the capture and push masks
+    // we want to add enpassant destination to the push mask so that pawns can enpassant to get out of check
+//    if (enpassant != no_square) {
+//        push_mask |= (1ULL << enpassant);
+//    }
+    // we also want to add the captured enpassant piece to the capture mask, so that
+
+
 
 }
 

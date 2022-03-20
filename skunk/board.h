@@ -576,6 +576,7 @@ public:
     U64 bishop_attacks[64][512];
     U64 occupancies[3];
     U64 bitboards[12];
+    U64 rays[64][64];
 
     // ZOBRISK HASHING
     U64 piece_keys[12][64];
@@ -599,6 +600,8 @@ public:
     t_line previous_pv_line;
 
     inline int is_repitition();
+    inline void construct_rays();
+    inline U64 generate_ray(int source, int destination);
     inline U64 construct_bishop_attacks(int square, U64 blockers);
     inline U64 construct_rook_attacks(int square, U64 blockers);
     inline U64 get_rook_attacks(int square, U64 occupancy);

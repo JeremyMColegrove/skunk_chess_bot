@@ -18,15 +18,18 @@ t_commands split_command(char *command, char * seperator);
 
 
 
+
 int main(int argc, char **argv) {
     Skunk *skunk = new Skunk();
-    skunk->parse_position("position fen B7/1k6/P7/4pn2/3r4/2P1K3/7R/1Q6 w");
+    skunk->parse_position("position fen B7/8/2k1N3/4p1R1/3n4/2K4q/P2P4/1Q6 w");
     skunk->print_board();
     t_moves moves;
     skunk->generate_moves(moves);
     skunk->print_moves(moves);
     return 0;
 }
+
+
 
 void uci_loop() {
     setbuf(stdin, NULL);
