@@ -21,7 +21,7 @@ t_commands split_command(char *command, char * seperator);
 
 int main(int argc, char **argv) {
     Skunk *skunk = new Skunk();
-    skunk->parse_position("position fen 8/8/8/4r3/8/8/1K2R3/8 w");
+    skunk->parse_position("position fen 8/8/5b2/8/8/2K1R2r/8/8 w");
     skunk->print_board();
     t_moves moves;
     skunk->generate_moves(moves);

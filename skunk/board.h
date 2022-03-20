@@ -577,7 +577,10 @@ public:
     U64 occupancies[3];
     U64 bitboards[12];
     U64 rays[64][64];
-    int direction_rays[8][64]; // given a direction and a square, give me the furthest square in that direction
+    int get_piece(int square);
+    U64 get_attacks(int piece, int square);
+    enum {DE, DN, DNW, DNE, DSW, DSE, DS, DW}; // set up so the opposite direction is 8-i
+    int nearest_square[8][64]; // given a direction and a square, give me the furthest square in that direction
 
     // ZOBRISK HASHING
     U64 piece_keys[12][64];

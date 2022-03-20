@@ -327,29 +327,29 @@ void Skunk::construct_direction_rays() {
 
     for (int i=0; i<64; i++) {
         // right
-        direction_rays[0][i] = i + (7 - i % 8);
+        nearest_square[DE][i] = i + (7 - i % 8);
 
         // up
-        direction_rays[1][i] = i % 8;
+        nearest_square[DN][i] = i % 8;
 
         // left
-        direction_rays[2][i] = i - i % 8;
+        nearest_square[DW][i] = i - i % 8;
 
         // down
-        direction_rays[3][i] = 56 + i % 8;
+        nearest_square[DS][i] = 56 + i % 8;
 
 
         // upper right
-        direction_rays[4][i] = i - std::min(i / 8, 7 - i % 8) * 7;
+        nearest_square[DNE][i] = i - std::min(i / 8, 7 - i % 8) * 7;
 
         // lower right
-        direction_rays[5][i] = i + std::min(7 - i / 8, 7 - i % 8) * 9;
+        nearest_square[DSE][i] = i + std::min(7 - i / 8, 7 - i % 8) * 9;
 
         // lower left
-        direction_rays[6][i] = i + std::min(7 - i / 8, i % 8) * 7;
+        nearest_square[DSW][i] = i + std::min(7 - i / 8, i % 8) * 7;
 
         // upper left
-        direction_rays[7][i] = i - std::min(i / 8, i % 8) * 9;
+        nearest_square[DNW][i] = i - std::min(i / 8, i % 8) * 9;
     }
 
 
@@ -969,44 +969,71 @@ void Skunk::generate_moves(t_moves &moves_list)
     // calculate pinned pieces first and mask them from the board for further analysis
     // make king a slider piece, and detect intersection with opponent sliding enemy_attacks. Then, any piece on those intersections is pinned
 
-    U64 b;
-    for (int i=4; i<8; i++) {
-        print_bitboard(rays[d4][direction_rays[i][d4]] | (1ULL << direction_rays[i][d4]));
+    U64 slider_king = get_bishop_attacks(king_square, occupancies[both]) | get_rook_attacks(king_square, occupancies[both]);
+    // calculate the moves for each piece in each direction
+    for (int direction=0; direction<8; direction++) {
+        // get the king ray in the opposite direction
+        U64 king_ray = slider_king & rays[king_square][nearest_square[7 - direction][king_square]];
+
+        // now for each enemy piece, get the attack towards the king
+
+        // check pins by rooks?
+        pieces = opponent_bitboards[R];
+        while (pieces) {
+            int enemy_square = get_ls1b_index(pieces);
+
+            // which type of piece is it? Shoot, we need to know this to generate its attacks
+            U64 intersection = get_rook_attacks(enemy_square, occupancies[both]) & rays[enemy_square][nearest_square[direction][enemy_square]] & king_ray;
+            if (intersection == 0) {
+                pop_lsb(pieces);
+                continue;
+            }
+            int pinned_square = get_ls1b_index(intersection);
+            int piece = get_piece(pinned_square);
+            // we are only able to move on the ray between king and enemy piece, and must move so that it can block check
+            U64 attacks = get_attacks(piece, pinned_square) & (rays[king_square][enemy_square] | (1ULL << enemy_square)) & push_mask & capture_mask;
+            // go through each valid attack and add it to the list of moves
+            while (attacks) {
+                int destination = get_ls1b_index(attacks);
+                moves_list.moves[moves_list.count++] = encode_move(pinned_square, destination, piece, 0, 0, 0, 0, 0);
+                pop_lsb(attacks);
+            }
+
+            pop_lsb(pieces);
+        }
     }
-
-
-
-
-    // calculate regular pawn pushes
-//    if (side == white) {
-//        pieces = bitboards[pawn] >> 8;
-//    } else {
-//        pieces = bitboards[pawn] << 8;
-//    }
-//
-//    pieces &= ~occupancies[both] & push_mask;
-//
-//    while (pieces) {
-//        square = get_ls1b_index(pieces);
-//        moves_list.moves[moves_list.count++] = encode_move(get_ls1b_index(bitboards[pawn]), square, pawn, 0, 0, 0, 0, 0);
-//        pop_lsb(pieces);
-//    }
-
-    // now the sliding and capture masks are set, but now we have to add enpassant squares to the capture and push masks
-    // we want to add enpassant square to the push mask so that pawns can enpassant to get out of check
-//    if (enpassant != no_square) {
-//        push_mask |= (1ULL << enpassant);
-//    }
-    // we also want to add the captured enpassant piece to the capture mask, so that
-
-
-
 }
 
-void Skunk::generate_pinned_moves(int pinner, int king) {
-    // here we have a ray going from pinner to king, and we need to find the moves
+int Skunk::get_piece(int square) {
+    int type;
+    U64 mask = (1ULL << square);
+    for (type=P; type<=k; type++) {
+        if (bitboards[type] & mask) break;
+    }
+    return type;
+}
 
-    // bishop moves
+U64 Skunk::get_attacks(int piece, int square) {
+    // go through all of the bitboards and check which piece is on the piece, assuming it is not an invalid piece
+    U64 attacks = 0ULL;
+
+    switch (piece) {
+        case r:
+        case R:
+            return get_rook_attacks(square, occupancies[both]);
+        case b:
+        case B:
+            return get_bishop_attacks(square, occupancies[both]);
+        case q:
+        case Q:
+            return get_bishop_attacks(square, occupancies[both]) | get_rook_attacks(square, occupancies[both]);
+        case p:
+            break;
+        case P:
+            break;
+    }
+
+    return attacks;
 }
 
 void Skunk::add_move(t_moves &moves_list, int move) {
