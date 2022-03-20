@@ -577,6 +577,7 @@ public:
     U64 occupancies[3];
     U64 bitboards[12];
     U64 rays[64][64];
+    int direction_rays[8][64]; // given a direction and a square, give me the furthest square in that direction
 
     // ZOBRISK HASHING
     U64 piece_keys[12][64];
@@ -601,14 +602,15 @@ public:
 
     inline int is_repitition();
     inline void construct_rays();
-    inline U64 generate_ray(int source, int destination);
+    inline void construct_direction_rays();
     inline U64 construct_bishop_attacks(int square, U64 blockers);
     inline U64 construct_rook_attacks(int square, U64 blockers);
     inline U64 get_rook_attacks(int square, U64 occupancy);
     inline U64 get_bishop_attacks(int square, U64 occupancy);
     inline U64 get_queen_attacks(int square, U64 occupancy);
     inline int is_square_attacked(int square, int side);
-    inline U64 get_atttacked_squares();
+    inline void get_atttacked_squares(U64 &jumpers, U64 &sliders);
+    inline void generate_pinned_moves(int pinner, int king);
     int bit_count(U64 board);
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
