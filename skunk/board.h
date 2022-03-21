@@ -47,13 +47,11 @@
 /* | castling enp d_push capture promoted piece  dest   source
  * | 0        0   0      0000    0000     000000 000000 000000
  */
-#define encode_move(source, destination, piece, promoted, capture, double_push, enpassant, castling) \
+#define encode_move(source, destination, piece, promoted, enpassant, castling) \
     (source) |                                                                                  \
     (destination << 6) |                                                                        \
     (piece << 12) |                                                                             \
     (promoted << 16) |                                                                          \
-    (capture << 20) |                                                                           \
-    (double_push << 21) |                                                                       \
     (enpassant << 22) |                                                                         \
     (castling << 23)
 
@@ -63,8 +61,9 @@
 #define decode_destination(move) (((move) & 0xfc0) >> 6)
 #define decode_piece(move) (((move) & 0xf000) >> 12)
 #define decode_promoted(move) (((move) & 0xf0000) >> 16)
-#define decode_capture(move) ((move) & 0x100000)
-#define decode_double(move) ((move) & 0x200000)
+//#define decode_capture(move) ((move) & 0x100000)
+//#define decode_double(move) ((move) & 0x200000)
+#define is_capture(move) ((1ULL << decode_destination(move)) & occupancies[side ^ 1] || decode_enpassant(move))
 #define decode_enpassant(move) ((move) & 0x400000)
 #define decode_castle(move) ((move) & 0x800000)
 
@@ -78,7 +77,7 @@
 #define NO_NULL 0
 // transposition table definitions
 //#define HASH_SIZE 3999971 //~4 MB (must be prime) for actual games
-#define HASH_SIZE 4000000 // small amount for testing
+#define HASH_SIZE 3999971 // small amount for testing
 #define HASH_EXACT 0
 #define HASH_LOWERBOUND 1
 #define HASH_UPPERBOUND 2
@@ -165,9 +164,129 @@ enum {all_moves, only_captures};
  */
 #define not_ab_file 18229723555195321596ULL
 
+/**
+ * row2 for double pawn pushes
+8		0  0  0  0  0  0  0  0
+7		0  0  0  0  0  0  0  0
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		1  1  1  1  1  1  1  1
+1		0  0  0  0  0  0  0  0
+
+		a  b  c  d  e  f  g  h
+ */
+
+#define row2 71776119061217280ULL
+
+/**
+ * row7 for double pawn pushes
+ 8		0  0  0  0  0  0  0  0
+7		1  1  1  1  1  1  1  1
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		0  0  0  0  0  0  0  0
+1		0  0  0  0  0  0  0  0
+
+		a  b  c  d  e  f  g  h
+		Board number: 65280
+ */
+#define row7 65280
 
 
+/**
+8		1  1  1  1  1  1  1  1
+7		0  0  0  0  0  0  0  0
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		0  0  0  0  0  0  0  0
+1		0  0  0  0  0  0  0  0
 
+		a  b  c  d  e  f  g  h
+		Board number: 255
+ */
+#define row8 255
+
+/**
+8		0  0  0  0  0  0  0  0
+7		0  0  0  0  0  0  0  0
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		0  0  0  0  0  0  0  0
+1		1  1  1  1  1  1  1  1
+
+		a  b  c  d  e  f  g  h
+		Board number: 18374686479671623680
+ */
+#define row1 18374686479671623680
+
+/**
+ * castling mask
+8		0  0  0  0  0  0  0  0
+7		0  0  0  0  0  0  0  0
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		0  0  0  0  0  0  0  0
+1		0  0  0  0  0  1  1  0
+
+		a  b  c  d  e  f  g  h
+		Board number: 6917529027641081856
+ */
+#define castle_mask_wk 6917529027641081856
+
+/**
+8		0  0  0  0  0  1  1  0
+7		0  0  0  0  0  0  0  0
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		0  0  0  0  0  0  0  0
+1		0  0  0  0  0  0  0  0
+
+		a  b  c  d  e  f  g  h
+		Board number: 96
+ */
+#define castle_mask_bk 96
+
+/**
+8		0  0  0  0  0  0  0  0
+7		0  0  0  0  0  0  0  0
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		0  0  0  0  0  0  0  0
+1		0  1  1  1  0  0  0  0
+
+		a  b  c  d  e  f  g  h
+		Board number: 1008806316530991104
+ */
+#define castle_mask_wq 1008806316530991104
+
+/**
+8		0  1  1  1  0  0  0  0
+7		0  0  0  0  0  0  0  0
+6		0  0  0  0  0  0  0  0
+5		0  0  0  0  0  0  0  0
+4		0  0  0  0  0  0  0  0
+3		0  0  0  0  0  0  0  0
+2		0  0  0  0  0  0  0  0
+1		0  0  0  0  0  0  0  0
+
+		a  b  c  d  e  f  g  h
+		Board number: 14
+ */
+#define castle_mask_bq 14
 enum {
     a8, b8, c8, d8, e8, f8, g8, h8,
     a7, b7, c7, d7, e7, f7, g7, h7,
@@ -234,6 +353,7 @@ typedef struct {
     int discovered_checks[MAX_PERFT_DEPTH];
     int double_checks[MAX_PERFT_DEPTH];
     int checkmates[MAX_PERFT_DEPTH];
+    int enpassants[MAX_PERFT_DEPTH];
 } perft;
 
 typedef struct {
@@ -578,7 +698,7 @@ public:
     U64 bitboards[12];
     U64 rays[64][64];
     int get_piece(int square);
-    U64 get_attacks(int piece, int square);
+    U64 get_attacks(int piece, int square, int side);
     enum {DE, DN, DNW, DNE, DSW, DSE, DS, DW}; // set up so the opposite direction is 8-i
     int nearest_square[8][64]; // given a direction and a square, give me the furthest square in that direction
 
@@ -612,13 +732,16 @@ public:
     inline U64 get_bishop_attacks(int square, U64 occupancy);
     inline U64 get_queen_attacks(int square, U64 occupancy);
     inline int is_square_attacked(int square, int side);
-    inline void get_atttacked_squares(U64 &jumpers, U64 &sliders);
-    inline void generate_pinned_moves(int pinner, int king);
+    inline U64 get_slider_attacks();
+    inline U64 get_jumper_attacks();
     int bit_count(U64 board);
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
     inline void fill_occupancies();
     inline void generate_moves(t_moves &moves_list);
+    inline void generate_moves_old(t_moves &moves_list);
+    inline void print_difference(t_moves &a, t_moves &b);
+    inline void print_move_detailed(int move);
     inline int make_move(int move, int move_flag);
     void perft_test(int depth);
     int evaluate();
@@ -671,6 +794,9 @@ public:
     int UCI_AnalyseMode = 1;
     int time_check_node_interval = 50000;
 
+
+    int enpassant = no_square;
+
 private:
     void perft_test_helper(int depth);
 
@@ -686,7 +812,6 @@ private:
     void add_move(t_moves &moves_list, int move);
     void clear_moves();
     int side = white;
-    int enpassant = no_square;
     int castle = 0;
     int full_moves = 0;
     int ply = 0;

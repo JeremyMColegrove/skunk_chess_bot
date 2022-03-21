@@ -748,17 +748,11 @@ void Skunk::print_board() {
     // print files
     std::cout << "\n     " << "a  b  c  d  e  f  g  h" << std::endl;
     // print whos turn it is
-//    std::cout << "\nSide: " << (side == white ? "white" : "black") << std::endl;
-//    // print en passant square
-//    std::cout << "\nEn Passant: " << (enpassant != no_square ?  square_to_coordinate[enpassant] : "none") << std::endl;
-//    //print castling rights
-//    std::cout << "\nCastling: " << ((castle&wk) ? 'K':'-') << ((castle&wq)?'Q':'-') << ((castle&bk)?'k':'-') << ((castle&bq)?'q':'-') << std::endl;
-//
-//    std::cout << "\nHalf t_moves: " << half_moves << std::endl;
-//
-//    std::cout << "\nFull t_moves: " << full_moves << std::endl;
-
-
+    std::cout << "\nSide: " << (side == white ? "white" : "black") << std::endl;
+    // print en passant square
+    printf("Enpassant: %s\n", enpassant==no_square?"None":square_to_coordinate[enpassant]);
+    //print castling rights
+    std::cout << "\nCastling: " << ((castle&wk) ? 'K':'-') << ((castle&wq)?'Q':'-') << ((castle&bk)?'k':'-') << ((castle&bq)?'q':'-') << std::endl;
 
 }
 
@@ -809,27 +803,12 @@ U64 Skunk::set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
 ===============================
 \*****************************/
 
-void Skunk::get_atttacked_squares(U64 &jumpers, U64 &sliders) {
+U64 Skunk::get_slider_attacks() {
     U64 pieces;
-    jumpers = 0ULL;
-    sliders = 0ULL;
-    int pawn = P, knight=N, bishop=B, rook=R, queen=Q, king=K;
+    U64 sliders = 0ULL;
+    int knight=N, bishop=B, rook=R, queen=Q;
     if (side == white) {
-        pawn = p, knight=n, bishop=b, rook=r, queen=q, king=k;
-    }
-
-    // calculate white pawn attacks
-    pieces = bitboards[pawn];
-    while (pieces) {
-        jumpers |= pawn_masks[side^1][get_ls1b_index(pieces)];
-        pop_lsb(pieces);
-    }
-
-    // calculate knight attacks
-    pieces = bitboards[knight];
-    while (pieces) {
-        jumpers |= knight_masks[get_ls1b_index(pieces)];
-        pop_lsb(pieces);
+        knight=n, bishop=b, rook=r, queen=q;
     }
 
     pieces = bitboards[bishop];
@@ -852,12 +831,37 @@ void Skunk::get_atttacked_squares(U64 &jumpers, U64 &sliders) {
         pop_lsb(pieces);
     }
 
+    return sliders;
+}
+U64 Skunk::get_jumper_attacks() {
+    U64 pieces;
+    U64 jumpers = 0ULL;
+    int pawn = P, knight=N, king=K;
+    if (side == white) {
+        pawn = p, knight=n, king=k;
+    }
+
+    // calculate white pawn attacks
+    pieces = bitboards[pawn];
+    while (pieces) {
+        jumpers |= pawn_masks[side^1][get_ls1b_index(pieces)];
+        pop_lsb(pieces);
+    }
+
+    // calculate knight attacks
+    pieces = bitboards[knight];
+    while (pieces) {
+        jumpers |= knight_masks[get_ls1b_index(pieces)];
+        pop_lsb(pieces);
+    }
+
     //calculate king attacks
     pieces = bitboards[king];
     while (pieces) {
         jumpers |= king_masks[get_ls1b_index(pieces)];
         pop_lsb(pieces);
     }
+    return jumpers;
 }
 
 
@@ -882,7 +886,6 @@ void Skunk::generate_moves(t_moves &moves_list)
      *
     \******************************************/
 
-
     // get the right pieces
     int pawn = P, knight=N, bishop=B, rook=R, queen=Q, king=K;
     U64 *opponent_bitboards=bitboards+6;
@@ -896,7 +899,8 @@ void Skunk::generate_moves(t_moves &moves_list)
 
     int king_square = get_ls1b_index(bitboards[king]);
     pop_bit(occupancies[both], king_square);
-    get_atttacked_squares(attack_jumpers, attack_sliders);
+    attack_sliders = get_slider_attacks();
+    attack_jumpers = get_jumper_attacks();
     attacked_squares = attack_jumpers | attack_sliders;
     set_bit(occupancies[both], king_square);
 
@@ -905,7 +909,7 @@ void Skunk::generate_moves(t_moves &moves_list)
     while (pieces) {
         square = get_ls1b_index(pieces);
         // encode the move
-        moves_list.moves[moves_list.count++] = encode_move(get_ls1b_index(bitboards[king]), square, king, 0, 0, 0, 0, 0);
+        moves_list.moves[moves_list.count++] = encode_move(get_ls1b_index(bitboards[king]), square, king, 0, 0, 0);
         pop_lsb(pieces);
     }
 
@@ -916,7 +920,8 @@ void Skunk::generate_moves(t_moves &moves_list)
     \******************************************/
 
     // generate the attacked squares as normal after the king is done
-    get_atttacked_squares(attack_jumpers, attack_sliders);
+    attack_sliders = get_slider_attacks();
+    attack_jumpers = get_jumper_attacks();
     attacked_squares = attack_jumpers | attack_sliders;
 
 
@@ -944,7 +949,7 @@ void Skunk::generate_moves(t_moves &moves_list)
 
 
     // if no pieces are checking the king, then any move on the board is a valid move and we do not check for early escape
-    if (capture_mask == 0) {
+    if (capture_mask == 0 && push_mask == 0) {
         capture_mask = 0xFFFFFFFFFFFFFFFF;
         push_mask = 0xFFFFFFFFFFFFFFFF;
 
@@ -966,46 +971,168 @@ void Skunk::generate_moves(t_moves &moves_list)
      *
     \******************************************/
 
-    // calculate pinned pieces first and mask them from the board for further analysis
-    // make king a slider piece, and detect intersection with opponent sliding enemy_attacks. Then, any piece on those intersections is pinned
+    // calculate pinned pieces first and remove them from the board for further move generation
+    U64 unpinned_pieces[12];
+    memcpy(unpinned_pieces, bitboards, 12 * sizeof(U64));
 
+    // make king a slider piece, and detect intersection with opponent sliding enemy_attacks. Then, any piece on those intersections is pinned
     U64 slider_king = get_bishop_attacks(king_square, occupancies[both]) | get_rook_attacks(king_square, occupancies[both]);
+    int pinner_pieces[] = {R, B, Q};
+    int pinner_piece, enemy_square, pinned_square, piece, destination;
     // calculate the moves for each piece in each direction
     for (int direction=0; direction<8; direction++) {
         // get the king ray in the opposite direction
         U64 king_ray = slider_king & rays[king_square][nearest_square[7 - direction][king_square]];
 
-        // now for each enemy piece, get the attack towards the king
+        // check pins by each type of piece
+        for (int piece_index = 0; piece_index<3; piece_index++) {
+            pinner_piece = pinner_pieces[piece_index];
 
-        // check pins by rooks?
-        pieces = opponent_bitboards[R];
-        while (pieces) {
-            int enemy_square = get_ls1b_index(pieces);
-
-            // which type of piece is it? Shoot, we need to know this to generate its attacks
-            U64 intersection = get_rook_attacks(enemy_square, occupancies[both]) & rays[enemy_square][nearest_square[direction][enemy_square]] & king_ray;
-            if (intersection == 0) {
+            pieces = opponent_bitboards[pinner_piece];
+            while (pieces) {
+                enemy_square = get_ls1b_index(pieces);
                 pop_lsb(pieces);
-                continue;
+
+                // which type of piece is it? Shoot, we need to know this to generate its attacks
+                U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1) & rays[enemy_square][nearest_square[direction][enemy_square]] & king_ray;
+                intersection &= occupancies[side];
+
+                // if there is no pinned piece, do not try and pop a bit off...just return early here (happens more often than not)
+                if (intersection == 0) {
+                    continue;
+                }
+
+                // get the square that the pinned piece is on
+                pinned_square = get_ls1b_index(intersection);
+                // get the piece type on that square
+                piece = get_piece(pinned_square);
+
+                pop_bit(unpinned_pieces[piece], pinned_square);
+//                 we are only able to move on the ray between king and enemy piece, and must move so that it can block check
+                U64 attacks = get_attacks(piece, pinned_square, side) & (rays[king_square][enemy_square] | (1ULL << enemy_square)) & (push_mask | capture_mask);
+
+//              go through each valid attack and add it to the list of moves
+                while (attacks) {
+                    destination = get_ls1b_index(attacks);
+                    moves_list.moves[moves_list.count++] = encode_move(pinned_square, destination, piece, 0, 0, 0);
+                    pop_lsb(attacks);
+                }
             }
-            int pinned_square = get_ls1b_index(intersection);
-            int piece = get_piece(pinned_square);
-            // we are only able to move on the ray between king and enemy piece, and must move so that it can block check
-            U64 attacks = get_attacks(piece, pinned_square) & (rays[king_square][enemy_square] | (1ULL << enemy_square)) & push_mask & capture_mask;
-            // go through each valid attack and add it to the list of moves
+        }
+    }
+    /******************************************\
+     *
+     *              REGULAR MOVES
+     *
+    \******************************************/
+
+//    // we now are only dealing with unpinned pieces and no king movements, just plain and simple movements from here on out...
+    U64 attacks;
+
+
+    U64 filtered_capture_mask = capture_mask, filtered_push_mask = push_mask;
+    // do pawn attacks first
+    if (enpassant != no_square) {
+        filtered_capture_mask |= (1ULL << enpassant);
+        filtered_push_mask |= (1ULL << enpassant);
+    }
+
+    pieces = unpinned_pieces[pawn];
+    while (pieces) {
+        square = get_ls1b_index(pieces);
+        // get this persons attacks
+
+        attacks = get_attacks(pawn, square, side) & (filtered_capture_mask | filtered_push_mask);
+        // add each filtered (non promotion) attack
+        U64 filtered = attacks & ~row8 & ~row1;
+
+        // filter out pawn promotions
+        while (filtered) {
+            int destination = get_ls1b_index(filtered);
+            if (destination == enpassant) {
+                // remove both pawns from the board, check for check
+                int victim = enpassant + 8*(side==white?1:-1);
+                pop_bit(occupancies[both], square);
+                pop_bit(occupancies[both], victim);
+                // check if the king is horizontally in check by any queen or rook
+                // include any pinned pieces in this check
+                // check each queen
+                int lsq = nearest_square[DW][king_square], rsq=nearest_square[DE][king_square];
+                U64 sliders = get_slider_attacks() & (rays[king_square][lsq] | rays[king_square][rsq] | (1ULL << lsq) | (1ULL << rsq));
+                if ((sliders & bitboards[king]) == 0) {
+                    moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, 0, 1, 0);
+                }
+                set_bit(occupancies[both], square);
+                set_bit(occupancies[both], victim);
+            } else {
+                moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, 0, 0, 0);
+            }
+            pop_lsb(filtered);
+        }
+        // get pawn pushes/captures onto the 8th rank
+        filtered = attacks & (row8 | row1);
+        while (filtered) {
+            int destination = get_ls1b_index(filtered);
+            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, rook, 0, 0);
+            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, bishop, 0, 0);
+            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, queen, 0, 0);
+            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, knight, 0, 0);
+
+            pop_lsb(filtered);
+        }
+        pop_lsb(pieces);
+    }
+
+    // do rook, queen, bishop, and knight moves
+    int regular_pieces[] = {rook, queen, bishop, knight};
+    for (int i=0; i<4; i++) {
+        piece = regular_pieces[i];
+        pieces = unpinned_pieces[piece];
+
+        while (pieces) {
+            square = get_ls1b_index(pieces);
+            attacks = get_attacks(piece, square, side) & (capture_mask | push_mask);
             while (attacks) {
-                int destination = get_ls1b_index(attacks);
-                moves_list.moves[moves_list.count++] = encode_move(pinned_square, destination, piece, 0, 0, 0, 0, 0);
+                destination = get_ls1b_index(attacks);
+
+                moves_list.moves[moves_list.count++] = encode_move(square, destination, piece, 0, 0, 0);
                 pop_lsb(attacks);
             }
-
             pop_lsb(pieces);
         }
     }
+
+    /******************************************\
+     *
+     *             CASTLING MOVES
+     *
+    \******************************************/
+    if (side == white && (attacked_squares & bitboards[K]) == 0) {
+        // if castling is available and king is not in check
+        if (castle & wk && ((attacked_squares | occupancies[both]) & castle_mask_wk) == 0) {
+            moves_list.moves[moves_list.count++] = encode_move(e1, g1, K, 0, 0, 1);
+        }
+
+        if (castle & wq && ((attacked_squares | occupancies[both]) & castle_mask_wq) == 0) {
+            moves_list.moves[moves_list.count++] = encode_move(e1, c1, K, 0, 0, 1);
+        }
+    } else if ((attacked_squares & bitboards[k]) == 0) {
+        if (castle & bk && ((attacked_squares | occupancies[both]) & castle_mask_bk) == 0) {
+            moves_list.moves[moves_list.count++] = encode_move(e8, g8, k, 0, 0, 1);
+        }
+
+        if (castle & bq && ((attacked_squares | occupancies[both]) & castle_mask_bq) == 0) {
+            moves_list.moves[moves_list.count++] = encode_move(e8, c8, k, 0, 0, 1);
+        }
+    }
+
+
+
+
 }
 
 int Skunk::get_piece(int square) {
-    int type;
+    int type = -1;
     U64 mask = (1ULL << square);
     for (type=P; type<=k; type++) {
         if (bitboards[type] & mask) break;
@@ -1013,27 +1140,481 @@ int Skunk::get_piece(int square) {
     return type;
 }
 
-U64 Skunk::get_attacks(int piece, int square) {
+U64 Skunk::get_attacks(int piece, int square, int side) {
     // go through all of the bitboards and check which piece is on the piece, assuming it is not an invalid piece
     U64 attacks = 0ULL;
+    U64 piece_bitboard = (1ULL << square);
 
     switch (piece) {
         case r:
         case R:
-            return get_rook_attacks(square, occupancies[both]);
+            return get_rook_attacks(square, occupancies[both]) & ~occupancies[side];
         case b:
         case B:
-            return get_bishop_attacks(square, occupancies[both]);
+            return get_bishop_attacks(square, occupancies[both]) & ~occupancies[side];
         case q:
         case Q:
-            return get_bishop_attacks(square, occupancies[both]) | get_rook_attacks(square, occupancies[both]);
+            return (get_bishop_attacks(square, occupancies[both]) | get_rook_attacks(square, occupancies[both])) & ~occupancies[side];
         case p:
-            break;
+//             single pushes
+            attacks |= ((piece_bitboard << 8) & ~occupancies[both]) | (pawn_masks[side][square] & occupancies[side ^ 1]);
+//             double pushes
+            attacks |= ((((piece_bitboard & row7) << 8) & ~occupancies[both]) << 8) & ~occupancies[both];
+            // handle enpassants here as well
+            if (enpassant != no_square) {
+                attacks |= pawn_masks[side][square] & (1ULL << enpassant);
+            }
+            return attacks;
         case P:
-            break;
-    }
+            // single pushes
+            attacks |= ((piece_bitboard >> 8) & ~occupancies[both]) | (pawn_masks[side][square] & occupancies[side ^ 1]);
+            // double pushes
+            attacks |= ((((piece_bitboard & row2) >> 8) & ~occupancies[both]) >> 8) & ~occupancies[both];
 
+            // handle enpassants here as well
+            if (enpassant != no_square) {
+                // check if enpassant square and capture mask collide
+                attacks |= pawn_masks[side][square] & (1ULL << enpassant);
+            }
+            return attacks;
+        case n:
+        case N:
+            return knight_masks[square] & ~occupancies[side];
+        case k:
+        case K:
+            return king_masks[square] & ~occupancies[side];
+    }
     return attacks;
+}
+
+// generate all t_moves
+void Skunk::generate_moves_old(t_moves &moves_list)
+{
+    // init move count
+    moves_list.count = 0;
+
+    // define source & target squares
+    int source_square = 0, target_square = 0;
+
+    // define current piece's bitboard copy & it's attacks
+    U64 bitboard = 0ULL, attacks = 0ULL;
+
+    // loop over all the bitboards
+    for (int piece = P; piece <= k; piece++)
+    {
+        // init piece bitboard copy
+        bitboard = bitboards[piece];
+
+        // generate white pawns & white king castling t_moves
+        if (side == white)
+        {
+            // pick up white pawn bitboards index
+            if (piece == P)
+            {
+                // loop over white pawns within white pawn bitboard
+                while (bitboard)
+                {
+                    // init source square
+                    source_square = get_ls1b_index(bitboard);
+
+                    // init target square
+                    target_square = source_square - 8;
+
+                    // generate quite pawn t_moves
+                    if (!(target_square < a8) && !get_bit(occupancies[both], target_square))
+                    {
+                        // pawn promotion
+                        if (source_square >= a7 && source_square <= h7)
+                        {
+                            add_move(moves_list, encode_move(source_square, target_square, piece, Q, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, R, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, B, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, N, 0, 0));
+                        }
+
+                        else
+                        {
+                            // one square ahead pawn move
+                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                            // two squares ahead pawn move
+                            if ((source_square >= a2 && source_square <= h2) && !get_bit(occupancies[both], target_square - 8))
+                                add_move(moves_list, encode_move(source_square, (target_square - 8), piece, 0, 0, 0));
+                        }
+                    }
+
+                    // init pawn attacks bitboard
+                    attacks = pawn_masks[side][source_square] & occupancies[black];
+
+                    // generate pawn captures
+                    while (attacks)
+                    {
+                        // init target square
+                        target_square = get_ls1b_index(attacks);
+
+                        // pawn promotion
+                        if (source_square >= a7 && source_square <= h7)
+                        {
+                            add_move(moves_list, encode_move(source_square, target_square, piece, Q, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, R, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, B, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, N, 0, 0));
+                        }
+
+                        else
+                            // one square ahead pawn move
+                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                        // pop ls1b of the pawn attacks
+                        pop_bit(attacks, target_square);
+                    }
+
+                    // generate enpassant captures
+                    if (enpassant != no_square)
+                    {
+                        // lookup pawn attacks and bitwise AND with enpassant square (bit)
+                        U64 enpassant_attacks = pawn_masks[side][source_square] & (1ULL << enpassant);
+
+                        // make sure enpassant capture available
+                        if (enpassant_attacks)
+                        {
+                            // init enpassant capture target square
+                            int target_enpassant = get_ls1b_index(enpassant_attacks);
+                            add_move(moves_list, encode_move(source_square, target_enpassant, piece, 0, 1, 0));
+                        }
+                    }
+
+                    // pop ls1b from piece bitboard copy
+                    pop_bit(bitboard, source_square);
+                }
+            }
+
+            // castling t_moves
+            if (piece == K)
+            {
+                // king side castling is available
+                if (castle & wk)
+                {
+                    // make sure square between king and king's rook are empty
+                    if (!get_bit(occupancies[both], f1) && !get_bit(occupancies[both], g1))
+                    {
+                        // make sure king and the f1 squares are not under attacks
+                        if (!is_square_attacked(e1, black) && !is_square_attacked(f1, black))
+                            add_move(moves_list, encode_move(e1, g1, piece, 0, 0, 1));
+                    }
+                }
+
+                // queen side castling is available
+                if (castle & wq)
+                {
+                    // make sure square between king and queen's rook are empty
+                    if (!get_bit(occupancies[both], d1) && !get_bit(occupancies[both], c1) && !get_bit(occupancies[both], b1))
+                    {
+                        // make sure king and the d1 squares are not under attacks
+                        if (!is_square_attacked(e1, black) && !is_square_attacked(d1, black))
+                            add_move(moves_list, encode_move(e1, c1, piece, 0, 0, 1));
+                    }
+                }
+            }
+        }
+
+            // generate black pawns & black king castling t_moves
+        else
+        {
+            // pick up black pawn bitboards index
+            if (piece == p)
+            {
+                // loop over white pawns within white pawn bitboard
+                while (bitboard)
+                {
+                    // init source square
+                    source_square = get_ls1b_index(bitboard);
+
+                    // init target square
+                    target_square = source_square + 8;
+
+                    // generate quite pawn t_moves
+                    if (!(target_square > h1) && !get_bit(occupancies[both], target_square))
+                    {
+                        // pawn promotion
+                        if (source_square >= a2 && source_square <= h2)
+                        {
+                            add_move(moves_list, encode_move(source_square, target_square, piece, q,  0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, r,  0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, b,  0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, n,  0, 0));
+                        }
+
+                        else
+                        {
+                            // one square ahead pawn move
+                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                            // two squares ahead pawn move
+                            if ((source_square >= a7 && source_square <= h7) && !get_bit(occupancies[both], target_square + 8))
+                                add_move(moves_list, encode_move(source_square, (target_square + 8), piece, 0, 0, 0));
+                        }
+                    }
+
+                    // init pawn attacks bitboard
+                    attacks = pawn_masks[side][source_square] & occupancies[white];
+
+                    // generate pawn captures
+                    while (attacks)
+                    {
+                        // init target square
+                        target_square = get_ls1b_index(attacks);
+
+                        // pawn promotion
+                        if (source_square >= a2 && source_square <= h2)
+                        {
+                            add_move(moves_list, encode_move(source_square, target_square, piece, q, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, r, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, b, 0, 0));
+                            add_move(moves_list, encode_move(source_square, target_square, piece, n, 0, 0));
+                        }
+
+                        else
+                            // one square ahead pawn move
+                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                        // pop ls1b of the pawn attacks
+                        pop_bit(attacks, target_square);
+                    }
+
+                    // generate enpassant captures
+                    if (enpassant != no_square)
+                    {
+                        // lookup pawn attacks and bitwise AND with enpassant square (bit)
+                        U64 enpassant_attacks = pawn_masks[side][source_square] & (1ULL << enpassant);
+
+                        // make sure enpassant capture available
+                        if (enpassant_attacks)
+                        {
+                            // init enpassant capture target square
+                            int target_enpassant = get_ls1b_index(enpassant_attacks);
+                            add_move(moves_list, encode_move(source_square, target_enpassant, piece, 0, 1, 0));
+                        }
+                    }
+
+                    // pop ls1b from piece bitboard copy
+                    pop_bit(bitboard, source_square);
+                }
+            }
+
+            // castling t_moves
+            if (piece == k)
+            {
+                // king side castling is available
+                if (castle & bk)
+                {
+                    // make sure square between king and king's rook are empty
+                    if (!get_bit(occupancies[both], f8) && !get_bit(occupancies[both], g8))
+                    {
+                        // make sure king and the f8 squares are not under attacks
+                        if (!is_square_attacked(e8, white) && !is_square_attacked(f8, white))
+                            add_move(moves_list, encode_move(e8, g8, piece, 0, 0, 1));
+                    }
+                }
+
+                // queen side castling is available
+                if (castle & bq)
+                {
+                    // make sure square between king and queen's rook are empty
+                    if (!get_bit(occupancies[both], d8) && !get_bit(occupancies[both], c8) && !get_bit(occupancies[both], b8))
+                    {
+                        // make sure king and the d8 squares are not under attacks
+                        if (!is_square_attacked(e8, white) && !is_square_attacked(d8, white))
+                            add_move(moves_list, encode_move(e8, c8, piece, 0, 0, 1));
+                    }
+                }
+            }
+        }
+
+        // genarate knight t_moves
+        if ((side == white) ? piece == N : piece == n)
+        {
+            // loop over source squares of piece bitboard copy
+            while (bitboard)
+            {
+                // init source square
+                source_square = get_ls1b_index(bitboard);
+
+                // init piece attacks in order to get set of target squares
+                attacks = knight_masks[source_square] & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
+
+                // loop over target squares available from generated attacks
+                while (attacks)
+                {
+                    // init target square
+                    target_square = get_ls1b_index(attacks);
+
+                    // quite move
+                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    else
+                        // capture move
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    // pop ls1b in current attacks set
+                    pop_bit(attacks, target_square);
+                }
+
+
+                // pop ls1b of the current piece bitboard copy
+                pop_bit(bitboard, source_square);
+            }
+        }
+
+        // generate bishop t_moves
+        if ((side == white) ? piece == B : piece == b)
+        {
+            // loop over source squares of piece bitboard copy
+            while (bitboard)
+            {
+                // init source square
+                source_square = get_ls1b_index(bitboard);
+
+                // init piece attacks in order to get set of target squares
+                attacks = get_bishop_attacks(source_square, occupancies[both]) & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
+
+
+                // loop over target squares available from generated attacks
+                while (attacks)
+                {
+                    // init target square
+                    target_square = get_ls1b_index(attacks);
+
+                    // quite move
+                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    else
+                        // capture move
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    // pop ls1b in current attacks set
+                    pop_bit(attacks, target_square);
+                }
+
+
+                // pop ls1b of the current piece bitboard copy
+                pop_bit(bitboard, source_square);
+            }
+        }
+
+        // generate rook t_moves
+        if ((side == white) ? piece == R : piece == r)
+        {
+            // loop over source squares of piece bitboard copy
+            while (bitboard)
+            {
+                // init source square
+                source_square = get_ls1b_index(bitboard);
+
+                // init piece attacks in order to get set of target squares
+                attacks = get_rook_attacks(source_square, occupancies[both]) & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
+
+                // loop over target squares available from generated attacks
+                while (attacks)
+                {
+                    // init target square
+                    target_square = get_ls1b_index(attacks);
+
+                    // quite move
+                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square)) {
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    }
+
+                    else
+                        // capture move
+                    {
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+                    }
+
+                    // pop ls1b in current attacks set
+                    pop_bit(attacks, target_square);
+                }
+
+
+                // pop ls1b of the current piece bitboard copy
+                pop_bit(bitboard, source_square);
+            }
+        }
+
+        // generate queen t_moves
+        if ((side == white) ? piece == Q : piece == q)
+        {
+            // loop over source squares of piece bitboard copy
+            while (bitboard)
+            {
+                // init source square
+                source_square = get_ls1b_index(bitboard);
+
+                // init piece attacks in order to get set of target squares
+                attacks = get_queen_attacks(source_square, occupancies[both]) & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
+
+                // loop over target squares available from generated attacks
+                while (attacks)
+                {
+                    // init target square
+                    target_square = get_ls1b_index(attacks);
+
+                    // quite move
+                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    else
+                        // capture move
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    // pop ls1b in current attacks set
+                    pop_bit(attacks, target_square);
+                }
+
+
+                // pop ls1b of the current piece bitboard copy
+                pop_bit(bitboard, source_square);
+            }
+        }
+
+        // generate king t_moves
+        if ((side == white) ? piece == K : piece == k)
+        {
+            // loop over source squares of piece bitboard copy
+            while (bitboard)
+            {
+                // init source square
+                source_square = get_ls1b_index(bitboard);
+
+                // init piece attacks in order to get set of target squares
+                attacks = king_masks[source_square] & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
+
+                // loop over target squares available from generated attacks
+                while (attacks)
+                {
+                    // init target square
+                    target_square = get_ls1b_index(attacks);
+
+                    // quite move
+                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    else
+                        // capture move
+                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
+
+                    // pop ls1b in current attacks set
+                    pop_bit(attacks, target_square);
+                }
+
+                // pop ls1b of the current piece bitboard copy
+                pop_bit(bitboard, source_square);
+            }
+        }
+    }
 }
 
 void Skunk::add_move(t_moves &moves_list, int move) {
@@ -1044,19 +1625,17 @@ void Skunk::add_move(t_moves &moves_list, int move) {
 
 void Skunk::print_moves(t_moves &moves_list)
 {
-    printf("%-9s %-6s %-8s %-7s %-9s %-9s %-9s %-9s %-9s\n","num", "source", "target", "piece", "score", "capture", "d-push", "enpassant", "castle");
+    printf("%-9s %-6s %-8s %-7s %-9s %-9s %-9s\n","num", "source", "target", "piece", "score", "enpassant", "castle");
 
     for (int i=0; i<moves_list.count; i++)
     {
         int move = moves_list.moves[i];
-        printf("%-9d %-6s %-8s %-7c %-9d %-9d %-9d %-9d %-9d\n",
+        printf("%-9d %-6s %-8s %-7c %-9d %-9d %-9d\n",
                move,
                square_to_coordinate[decode_source(move)],
                square_to_coordinate[decode_destination(move)],
                ascii_pieces[decode_piece(move)],
                score_move(move),
-               decode_capture(move),
-               decode_double(move),
                decode_enpassant(move),
                decode_castle(move)
                );
@@ -1105,7 +1684,7 @@ int Skunk::score_move(int move) {
     }
 
 
-    if (decode_capture(move)) {
+    if (is_capture(move)) {
         // consult the lookup table
         int attacker = decode_piece(move);
         int victim = 0;
@@ -1246,8 +1825,6 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
     }
 
     if (force_stop) return 0;
-
-
 
     /*
      * Check for repetitions (does not work for some reason?)
@@ -1391,17 +1968,14 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 
     int best = 0;
 
+    copy_board();
+
     // loop through each move
     for (int i = 0; i<moves_list.count; i++) {
 
         int move = moves_list.moves[i];
 
-        copy_board();
-
-        if (!make_move(move, all_moves)) {
-            continue;
-        }
-
+        make_move(move, all_moves);
 #ifdef DEBUG
         assert(zobrist == generate_zobrist());
 #endif
@@ -1420,7 +1994,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
             test = -negamax(-beta, -alpha, depth -1, verify, DO_NULL, &line);
         } else {
             // LMR
-            if (searched_moves > 3 && depth > 2 && !check && decode_capture(move) == 0 && decode_promoted(move) == 0) {
+            if (searched_moves > 3 && depth > 2 && !check && is_capture(move) && decode_promoted(move) == 0) {
                 int LMR_R = 2;
                 test = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, NULL);
             } else test = alpha + 1;
@@ -1464,7 +2038,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
         // beta cutoff
         if (score >= beta) {
             // ADD mask ply check here to avoid segfaults
-            if (!decode_capture(move) && ply < MAX_PLY) {
+            if (!is_capture(move) && ply < MAX_PLY) {
                 history_moves[side][decode_source(move)][decode_destination(move)] += depth*depth;
                 killer_moves[1][ply] = killer_moves[0][ply];
                 killer_moves[0][ply] = move;
@@ -1796,13 +2370,14 @@ void Skunk::perft_test(int depth) {
 
     int per_second = perft_results.total_nodes/elapsed;
 
-    printf("%-10s\t%-10s\t%-10s\t%-10s\t%-10s\n", "depth", "nodes", "captures", "castles", "promoted");
+    printf("%-10s\t%-10s\t%-10s\t%-10s\t%-10s\t%-10s\n", "depth", "nodes", "captures", "enpassants", "castles", "promoted");
 
-    for (int i=depth; i>=1; i--) {
-        printf("%-10d\t%-10d\t%-10d\t%-10d\t%-10d\n",
+    for (int i=depth; i>=0; i--) {
+        printf("%-10d\t%-10d\t%-10d\t%-10d\t%-10d\t%-10d\n",
                depth - i + 1,
                perft_results.nodes[i+1],
                perft_results.captures[i+1],
+               perft_results.enpassants[i+1],
                perft_results.castles[i+1],
                perft_results.promotions[i+1]);
     }
@@ -1810,40 +2385,37 @@ void Skunk::perft_test(int depth) {
 }
 
 
-
 void Skunk::perft_test_helper(int depth) {
 
     if (depth < 1) return;
 
-    t_moves moves_list;
+    t_moves new_moves;
+    t_moves psuedo;
+    t_moves valid = {.count = 0};
 
-    generate_moves(moves_list);
+    generate_moves(new_moves);
+
+    // check to make sure they are both the same
 
     copy_board();
+    int made_moves = 0;
+    for (int move_count = 0; move_count < new_moves.count; move_count++) {
 
-    for (int move_count = 0; move_count < moves_list.count; move_count++) {
+        int  move = new_moves.moves[move_count];
 
-        int  move = moves_list.moves[move_count];
-
-        if (!make_move(move, all_moves)) {
-            continue;
+        if (is_capture(move)) {
+            perft_results.captures[depth]++;
+        }
+        if (decode_enpassant(move)) {
+            perft_results.enpassants[depth] ++;
         }
 
-        // check if the hashes are the same
+        make_move(move, all_moves);
+
 #ifdef DEBUG
         assert(zobrist == generate_zobrist());
 #endif
 
-        if (decode_capture(move)) {
-            perft_results.captures[depth] ++;
-        }
-
-        if (decode_castle(move)) {
-            perft_results.castles[depth] ++;
-        }
-        if (decode_promoted(move)) {
-            perft_results.promotions[depth] ++;
-        }
 
         perft_results.nodes[depth] ++;
         perft_results.total_nodes ++;
@@ -1866,16 +2438,12 @@ int Skunk::is_repitition() {
  int Skunk::make_move(int move, int move_flag) {
 //
     if (move_flag == all_moves) {
-        copy_board();
-        // make a move
 
         int source = decode_source(move);
         int target = decode_destination(move);
         int enp = decode_enpassant(move);
         int castling = decode_castle(move);
         int piece = decode_piece(move);
-        int doube_push = decode_double(move);
-        int capture = decode_capture(move);
         int promoted = decode_promoted(move);
 
         pop_bit(bitboards[piece], source);
@@ -1884,19 +2452,21 @@ int Skunk::is_repitition() {
         zobrist ^= piece_keys[piece][source];
         zobrist ^= piece_keys[piece][target];
 
-        if (capture) {
-            int start_piece = (side == white) ? p : P;
-            int end_piece = (side == white) ? k : K;
+        int pawn = P, knight = N, king = K, queen = Q, bishop = B, rook = R;
+        U64 *opponent_bitboards = bitboards + 6;
+        if (side == black) {
+            opponent_bitboards = bitboards;
+            pawn = p, knight = n, king = k, queen = q, bishop = b, rook = r;
+        }
 
-            for (int piece = start_piece; piece < end_piece; piece++) {
-                if (get_bit(bitboards[piece], target)) {
+        if (is_capture(move)) {
+            for (int piece = P; piece <= K; piece++) {
+                if (get_bit(opponent_bitboards[piece], target)) {
                     // remove piece from bitboard
 #ifdef DEBUG
                     assert(piece != K && piece != k);
 #endif
-                    pop_bit(bitboards[piece], decode_destination(move));
-
-                    piece_count[piece] --;
+                    pop_bit(opponent_bitboards[piece], target);
 
                     // remove the piece from the board hash
                     zobrist ^= piece_keys[piece][target];
@@ -1904,26 +2474,20 @@ int Skunk::is_repitition() {
                 }
             }
         }
+
         if (promoted) {
-            int piece = (side == white ? P : p);
-
-            pop_bit(bitboards[piece], target);
-
-            piece_count[piece];
-
+            pop_bit(bitboards[pawn], target);
             set_bit(bitboards[promoted], target);
-            zobrist ^= piece_keys[piece][target];
+            zobrist ^= piece_keys[pawn][target];
             zobrist ^= piece_keys[promoted][target];
         }
 
         if (enp) {
             if (side == white) {
                 pop_bit(bitboards[p], target + 8);
-                piece_count[p] --;
                 zobrist ^= piece_keys[p][target + 8];
             } else {
                 pop_bit(bitboards[P], target - 8);
-                piece_count[P] --;
                 zobrist ^= piece_keys[P][target - 8];
             }
         }
@@ -1934,16 +2498,16 @@ int Skunk::is_repitition() {
 
         enpassant = no_square;
 
-        if (doube_push) {
+        if (piece == pawn && abs(source - target) == 16) {
             if (side == white) {
                 enpassant = target + 8;
                 zobrist ^= enpassant_keys[target + 8];
             } else {
                 enpassant = target - 8;
                 zobrist ^= enpassant_keys[target - 8];
-
             }
         }
+
         if (castling) {
             switch (target) {
                 case g1:
@@ -1951,7 +2515,6 @@ int Skunk::is_repitition() {
                     set_bit(bitboards[R], f1);
                     zobrist ^= piece_keys[R][h1];
                     zobrist ^= piece_keys[R][f1];
-
                     break;
                 case c1:
                     pop_bit(bitboards[R], a1);
@@ -2001,14 +2564,10 @@ int Skunk::is_repitition() {
 
         zobrist ^= side_key;
 
-        if (is_square_attacked((side == white) ? get_ls1b_index(bitboards[k]) : get_ls1b_index(bitboards[K]), side)) {
-            restore_board();
-            return 0;
-        }
         return 1;
     } else {
         // call make_move recursively
-        if (decode_capture(move))
+        if (is_capture(move))
             return make_move(move, all_moves);
 
         // move is not a capture, return 0
@@ -2016,6 +2575,17 @@ int Skunk::is_repitition() {
     }
 }
 
+void Skunk::print_move_detailed(int move) {
+    printf("%-9d %-6s %-8s %-7c %-9d %-9d %-9d\n",
+           move,
+           square_to_coordinate[decode_source(move)],
+           square_to_coordinate[decode_destination(move)],
+           ascii_pieces[decode_piece(move)],
+           score_move(move),
+           decode_enpassant(move),
+           decode_castle(move)
+    );
+}
 
 void Skunk::print_move(int move) {
     int promoted = decode_promoted(move);
