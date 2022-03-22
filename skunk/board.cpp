@@ -1704,13 +1704,7 @@ int Skunk::score_move(int move) {
     if (is_capture(move)) {
         // consult the lookup table
         int attacker = decode_piece(move);
-        int victim = 0;
-        for (int piece=P; piece <= k; piece++) {
-            if (get_bit(bitboards[piece], decode_destination(move))) {
-                victim = piece;
-                break;
-            }
-        }
+        int victim = get_piece(decode_destination(move));
         return mvv_lva[attacker][victim] + 10000;
     } else {
         // score killer move 1
