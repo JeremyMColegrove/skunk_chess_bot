@@ -68,7 +68,6 @@
 #define decode_castle(move) ((move) & 0x800000)
 
 
-#define flip_square(sq) (sq ^ 56)
 #define MAX_PLY 72
 #define CHECKMATE 500000
 #define NULL_R 3
