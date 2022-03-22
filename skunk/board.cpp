@@ -898,6 +898,7 @@ void Skunk::generate_moves(t_moves &moves_list)
     // the attacked_squares for the king is a little bit more complicated. We must remove the king from the board, then generate enemy_attacks
 
     int king_square = get_ls1b_index(bitboards[king]);
+
     pop_bit(occupancies[both], king_square);
     attack_sliders = get_slider_attacks();
     attack_jumpers = get_jumper_attacks();
@@ -2384,7 +2385,10 @@ void Skunk::perft_test(int depth) {
 
     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    int per_second = perft_results.total_nodes/elapsed;
+    int per_second = -1;
+    if (elapsed > 0) {
+        per_second = perft_results.total_nodes/elapsed;
+    }
 
     printf("%-10s\t%-10s\t%-10s\t%-10s\t%-10s\t%-10s\n", "depth", "nodes", "captures", "enpassants", "castles", "promoted");
 
