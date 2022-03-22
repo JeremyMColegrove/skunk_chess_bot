@@ -21,23 +21,11 @@ t_commands split_command(char *command, char * seperator);
 
 int main(int argc, char **argv) {
     uci_loop();
-//    Skunk *skunk = new Skunk();
-//    skunk->parse_position("position fen r1bqkb2/pppppppp/2n2n2/4r3/5P2/BNQP1NB1/PPPP1P1P/R3K2R w KQkq - 0 1");
+//    Skunk * skunk = new Skunk();
+//    skunk->parse_fen("4k3/8/8/8/8/7p/PPPPQPPP/R3K2R w KQ - 0 1");
 //    t_moves moves;
 //    skunk->generate_moves(moves);
 //    skunk->print_moves(moves);
-//    int move = encode_move(f7, f8, P, Q, 0, 0);
-//    skunk->make_move(move, all_moves);
-//    skunk->print_board();
-//    skunk->print_bitboard(skunk->occupancies[white]);
-
-
-//    U64 board = 0ULL;
-//    Skunk skunk;
-//    set_bit(board, b8);
-//    set_bit(board, c8);
-//    set_bit(board, d8);
-//    skunk.print_bitboard(board);
     return 0;
 }
 

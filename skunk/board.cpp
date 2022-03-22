@@ -1116,7 +1116,7 @@ void Skunk::generate_moves(t_moves &moves_list)
         if (castle & wq && ((attacked_squares | occupancies[both]) & castle_mask_wq) == 0) {
             moves_list.moves[moves_list.count++] = encode_move(e1, c1, K, 0, 0, 1);
         }
-    } else if ((attacked_squares & bitboards[k]) == 0) {
+    } else if (side == black && (attacked_squares & bitboards[k]) == 0) {
         if (castle & bk && ((attacked_squares | occupancies[both]) & castle_mask_bk) == 0) {
             moves_list.moves[moves_list.count++] = encode_move(e8, g8, k, 0, 0, 1);
         }
@@ -2394,6 +2394,7 @@ void Skunk::perft_test_helper(int depth) {
     t_moves valid = {.count = 0};
 
     generate_moves(new_moves);
+//    generate_moves_old(psuedo);
 
     // check to make sure they are both the same
 
@@ -2407,15 +2408,26 @@ void Skunk::perft_test_helper(int depth) {
             perft_results.captures[depth]++;
         }
         if (decode_enpassant(move)) {
+
             perft_results.enpassants[depth] ++;
+        }
+        if (decode_castle(move)) {
+            print_board();
+            print_move_detailed(move);
+            getchar();
+            perft_results.castles[depth] ++;
+        }
+        if (decode_promoted(move)) {
+            perft_results.promotions[depth] ++;
         }
 
         make_move(move, all_moves);
 
+        valid.moves[valid.count++] = move;
+
 #ifdef DEBUG
         assert(zobrist == generate_zobrist());
 #endif
-
 
         perft_results.nodes[depth] ++;
         perft_results.total_nodes ++;
