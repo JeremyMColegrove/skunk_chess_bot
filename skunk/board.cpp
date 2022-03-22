@@ -996,7 +996,6 @@ void Skunk::generate_moves(t_moves &moves_list)
                 // which type of piece is it? Shoot, we need to know this to generate its attacks
                 U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1) & rays[enemy_square][nearest_square[direction][enemy_square]] & king_ray;
                 intersection &= occupancies[side];
-
                 // if there is no pinned piece, do not try and pop a bit off...just return early here (happens more often than not)
                 if (intersection == 0) {
                     continue;
@@ -1113,7 +1112,7 @@ void Skunk::generate_moves(t_moves &moves_list)
             moves_list.moves[moves_list.count++] = encode_move(e1, g1, K, 0, 0, 1);
         }
 
-        if (castle & wq && ((attacked_squares | occupancies[both]) & castle_mask_wq) == 0) {
+        if (castle & wq && (attacked_squares & castle_attack_mask_wq) ==0 && (occupancies[both] & castle_piece_mask_wq) == 0 ) {
             moves_list.moves[moves_list.count++] = encode_move(e1, c1, K, 0, 0, 1);
         }
     } else if ((attacked_squares & bitboards[k]) == 0) {
@@ -1121,7 +1120,7 @@ void Skunk::generate_moves(t_moves &moves_list)
             moves_list.moves[moves_list.count++] = encode_move(e8, g8, k, 0, 0, 1);
         }
 
-        if (castle & bq && ((attacked_squares | occupancies[both]) & castle_mask_bq) == 0) {
+        if (castle & bq && (attacked_squares & castle_attack_mask_bq) ==0 && (occupancies[both] & castle_piece_mask_bq) == 0 ) {
             moves_list.moves[moves_list.count++] = encode_move(e8, c8, k, 0, 0, 1);
         }
     }
@@ -2408,6 +2407,12 @@ void Skunk::perft_test_helper(int depth) {
         }
         if (decode_enpassant(move)) {
             perft_results.enpassants[depth] ++;
+        }
+        if (decode_castle(move)) {
+            perft_results.castles[depth] ++;
+        }
+        if (decode_promoted(move)) {
+            perft_results.promotions[depth] ++;
         }
 
         make_move(move, all_moves);

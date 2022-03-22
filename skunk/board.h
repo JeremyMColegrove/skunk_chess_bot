@@ -259,6 +259,20 @@ enum {all_moves, only_captures};
 #define castle_mask_bk 96
 
 /**
+8               0  0  0  0  0  0  0  0
+7               0  0  0  0  0  0  0  0
+6               0  0  0  0  0  0  0  0
+5               0  0  0  0  0  0  0  0
+4               0  0  0  0  0  0  0  0
+3               0  0  0  0  0  0  0  0
+2               0  0  0  0  0  0  0  0
+1               0  0  1  1  0  0  0  0
+
+                a  b  c  d  e  f  g  h
+                Board number: 864691128455135232
+ */
+#define castle_attack_mask_wq 864691128455135232
+/**
 8		0  0  0  0  0  0  0  0
 7		0  0  0  0  0  0  0  0
 6		0  0  0  0  0  0  0  0
@@ -271,8 +285,22 @@ enum {all_moves, only_captures};
 		a  b  c  d  e  f  g  h
 		Board number: 1008806316530991104
  */
-#define castle_mask_wq 1008806316530991104
+#define castle_piece_mask_wq 1008806316530991104
 
+/**
+8               0  0  1  1  0  0  0  0
+7               0  0  0  0  0  0  0  0
+6               0  0  0  0  0  0  0  0
+5               0  0  0  0  0  0  0  0
+4               0  0  0  0  0  0  0  0
+3               0  0  0  0  0  0  0  0
+2               0  0  0  0  0  0  0  0
+1               0  0  0  0  0  0  0  0
+
+                a  b  c  d  e  f  g  h
+                Board number: 12
+ */
+#define castle_attack_mask_bq 12
 /**
 8		0  1  1  1  0  0  0  0
 7		0  0  0  0  0  0  0  0
@@ -286,7 +314,7 @@ enum {all_moves, only_captures};
 		a  b  c  d  e  f  g  h
 		Board number: 14
  */
-#define castle_mask_bq 14
+#define castle_piece_mask_bq 14
 enum {
     a8, b8, c8, d8, e8, f8, g8, h8,
     a7, b7, c7, d7, e7, f7, g7, h7,
