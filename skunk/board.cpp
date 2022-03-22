@@ -1051,17 +1051,34 @@ void Skunk::generate_moves(t_moves &moves_list)
             if (destination == enpassant) {
                 // remove both pawns from the board, check for check
                 int victim = enpassant + 8*(side==white?1:-1);
+
                 pop_bit(occupancies[both], square);
+
                 pop_bit(occupancies[both], victim);
                 // check if the king is horizontally in check by any queen or rook
                 // include any pinned pieces in this check
                 // check each queen
                 int lsq = nearest_square[DW][king_square], rsq=nearest_square[DE][king_square];
-                U64 sliders = get_slider_attacks() & (rays[king_square][lsq] | rays[king_square][rsq] | (1ULL << lsq) | (1ULL << rsq));
+
+                U64 horizontal_mask = (rays[king_square][lsq] | rays[king_square][rsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << king_square));
+
+                // only get rooks and queens on the horizontal row
+                U64 horizontal_attackers = (opponent_bitboards[R] | opponent_bitboards[Q]) & horizontal_mask;
+
+                U64 sliders = 0ULL;
+
+                while (horizontal_attackers) {
+                    int horizontal_attacker_square = get_ls1b_index(horizontal_attackers);
+                    sliders |= get_rook_attacks(horizontal_attacker_square, occupancies[both]);
+                    pop_lsb(horizontal_attackers);
+                }
+
                 if ((sliders & bitboards[king]) == 0) {
                     moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, 0, 1, 0);
                 }
+
                 set_bit(occupancies[both], square);
+
                 set_bit(occupancies[both], victim);
             } else {
                 moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, 0, 0, 0);
@@ -2373,7 +2390,7 @@ void Skunk::perft_test(int depth) {
 
     for (int i=depth; i>=0; i--) {
         printf("%-10d\t%-10d\t%-10d\t%-10d\t%-10d\t%-10d\n",
-               depth - i + 1,
+               depth - i,
                perft_results.nodes[i+1],
                perft_results.captures[i+1],
                perft_results.enpassants[i+1],
@@ -2419,6 +2436,11 @@ void Skunk::perft_test_helper(int depth) {
 
         make_move(move, all_moves);
 
+//        if (is_square_attacked((side == white) ? get_ls1b_index(bitboards[k]) : get_ls1b_index(bitboards[K]), side)) {
+//            restore_board();
+//            continue;
+//        }
+
         valid.moves[valid.count++] = move;
 
 #ifdef DEBUG
@@ -2432,6 +2454,13 @@ void Skunk::perft_test_helper(int depth) {
 
         restore_board();
     }
+
+    // move counts differ
+//    if (valid.count != new_moves.count) {
+//        printf("Move count differ (%d to %d)\n", valid.count, new_moves.count);
+//        print_board();
+//        getchar();
+//    }
 }
 
 int Skunk::is_repitition() {

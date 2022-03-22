@@ -22,7 +22,8 @@ t_commands split_command(char *command, char * seperator);
 int main(int argc, char **argv) {
     uci_loop();
 //    Skunk *skunk = new Skunk();
-//    skunk->parse_fen("r3k2r/p6p/8/B7/1pp1p3/3b4/P6P/R3K2R w KQkq -");
+//    skunk->parse_fen("8/8/2pp4/KP4kr/5pP1/8/4P3/6R1 b - - 0 1");
+//    skunk->enpassant = g3;
 //    t_moves moves;
 //    skunk->generate_moves(moves);
 //    skunk->print_moves(moves);
@@ -30,9 +31,9 @@ int main(int argc, char **argv) {
 
 //    U64 board = 0ULL;
 //    Skunk *skunk = new Skunk();
-////    set_bit(board, b8);
-//    set_bit(board, c1);
-//    set_bit(board, d1);
+//    for (int i=0; i<64; i++) {
+//        set_bit(board, i);
+//    }
 //    skunk->print_bitboard(board);
     return 0;
 }
