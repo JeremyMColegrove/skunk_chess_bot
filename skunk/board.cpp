@@ -1716,8 +1716,8 @@ int Skunk::score_move(int move) {
             return 8000;
         }
 
-        return history_moves[side][decode_source(move)][decode_destination(move)];
         // score history move
+        return history_moves[side][decode_source(move)][decode_destination(move)];
     }
     return 0;
 }
@@ -1750,7 +1750,7 @@ void Skunk::write_hash_entry(int score, int depth, int move, int flag) {
 #ifdef TRANSPOSITION_TABLE
     t_entry  *entry = &transposition_table[zobrist % HASH_SIZE];
 
-    // adjust mating scores
+    // adjust mating scores ? not needed...actaully ends up ruining the score for some reason
 //    if (score < -CHECKMATE + 1000) score += ply;
 //    if (score > CHECKMATE - 1000) score -= ply;
 
@@ -1798,10 +1798,7 @@ int Skunk::quiesence(int alpha, int beta) {
         int move = moves_list.moves[i];
 
 
-        if (!make_move(move, only_captures)) {
-            restore_board();
-            continue;
-        }
+        make_move(move, only_captures);
 
         int test = -quiesence(-beta, -alpha);
 
@@ -1915,8 +1912,9 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
     }
 #endif
 
-    int fail_high = 0;
 #ifdef VERIFIED_NULL_MOVE
+    int fail_high = 0;
+
     if (!check && (!verify || depth > 1) && do_null == DO_NULL) {
         // make null move
         copy_board();
@@ -1987,6 +1985,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
         int move = moves_list.moves[i];
 
         make_move(move, all_moves);
+
 #ifdef DEBUG
         assert(zobrist == generate_zobrist());
 #endif
@@ -2023,6 +2022,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
             best = move;
         }
 
+#ifdef VERIFIED_NULL_MOVE
         // check if zugzwang is detected, if so, re-search with increased depth
         if (fail_high && score < beta) {
             depth++;
@@ -2030,6 +2030,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
             verify = 1;
             goto search;
         }
+#endif
 
         restore_board();
         searched_moves ++;
