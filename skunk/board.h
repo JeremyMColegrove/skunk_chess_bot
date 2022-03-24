@@ -33,7 +33,7 @@
 #define HASH_SIZE 399990
 
 // flag for enabling futility pruning in quiescence search
-//#define FUTILITY_PRUNE
+#define FUTILITY_PRUNE
 
 // flag for enabling NULL MOVE in negamax (DEPRECATED. USE VERIFIED NULL MOVE INSTEAD)
 //#define NULL_MOVE
@@ -477,7 +477,7 @@ public:
 
     t_line previous_pv_line;
 
-    inline int is_repitition();
+    inline int is_repetition();
     inline void construct_rays();
     inline void construct_direction_rays();
     inline U64 construct_bishop_attacks(int square, U64 blockers);

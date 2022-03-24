@@ -1462,8 +1462,8 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
 
     // 3-fold repetition
-    if (ply && is_repitition()) {
-        return -evaluate()*0.1; // instead of returning just a draw best_score, include a contempt factor (simply evaluate x weight). If white is losing, we want to draw so invert eval
+    if (ply && is_repetition()) {
+        return -evaluate()*0.25; // instead of returning just a draw best_score, include a contempt factor (simply evaluate x weight). If white is losing, we want to draw so invert eval
     }
 
 
@@ -1751,9 +1751,6 @@ int Skunk::evaluate() {
         bitboard = bitboards[piece];
         while (bitboard) {
             int square = get_ls1b_index(bitboard);
-            // add score for the piece existing
-
-            // score positional piece scores
             switch (piece)
             {
                 // evaluate white pieces
@@ -1909,14 +1906,14 @@ void Skunk::parse_position(char *command) {
 
     current_char = strstr(command, "moves");
 
-
+    repitition.count = 0;
     if (current_char != NULL) {
         current_char += 6;
         while (*current_char) {
             int move = parse_move(current_char);
-            if (move == 0) {
-                break;
-            }
+
+            if (move == 0) break;
+
             make_move(move, all_moves);
             repitition.table[repitition.count++] = zobrist;
             while (*current_char && *current_char != ' ') current_char ++;
@@ -1946,10 +1943,10 @@ int Skunk::parse_move(char *move_string) {
             int promoted = decode_promoted(move);
             // check if it is a promotion or not
             if (promoted) { // there is a promoted piece available
-                if (move_string[4]=='r' && (promoted==r || promoted==R)) return move;
-                if (move_string[4]=='b' && (promoted==b || promoted==B)) return move;
-                if (move_string[4]=='q' && (promoted==q || promoted==Q)) return move;
-                if (move_string[4]=='n' && (promoted==n || promoted==N)) return move;
+                if ((move_string[4]=='r' || move_string[4] == 'R') && (promoted==r || promoted==R)) return move;
+                if ((move_string[4]=='b' || move_string[4] == 'B') && (promoted==b || promoted==B)) return move;
+                if ((move_string[4]=='q' || move_string[4] == 'Q') && (promoted==q || promoted==Q)) return move;
+                if ((move_string[4]=='n' || move_string[4] == 'N') && (promoted==n || promoted==N)) return move;
                 continue;
             }
 
@@ -2047,8 +2044,8 @@ void Skunk::perft_test_helper(int depth) {
 //    }
 }
 
-int Skunk::is_repitition() {
-    for (int i = repitition.count - 2; i>=0; i-=2) {
+int Skunk::is_repetition() {
+    for (int i = repitition.count-2; i>=0; i--) {
         if (repitition.table[i] == zobrist) {
             return 1;
         }
