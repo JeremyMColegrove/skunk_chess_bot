@@ -20,6 +20,7 @@ void Skunk::parse_fen(char *fen) {
 
     // reset occupancies (bitboards)
     memset(occupancies, 0ULL, sizeof(occupancies));
+    memset(piece_count, 0, sizeof(piece_count));
 
     // reset game state variables
     side = 0;
@@ -43,6 +44,8 @@ void Skunk::parse_fen(char *fen) {
 
                 // set piece on corresponding bitboard
                 set_bit(bitboards[piece], square);
+
+                piece_count[piece] ++;
 
                 // increment pointer to FEN string
                 fen++;
@@ -250,15 +253,6 @@ void Skunk::clear_transposition_tables() {
 #endif
 }
 
-int Skunk::score_to_tt(int score, int ply)
-{
-    return score;//(score > CHECKMATE-1000) ? score + ply : (score < -CHECKMATE+1000) ? score - ply : score;
-}
-
-int Skunk::score_from_tt(int score, int ply)
-{
-    return score;//(score > CHECKMATE) ? score - ply : (score < -CHECKMATE) ? score + ply : score;
-}
 
 
 // generate 32-bit pseudo legal numbers
@@ -646,6 +640,7 @@ int Skunk::is_square_attacked(int square, int side)
     if (side != 0 && side != 1) {
         printf("Weird, side is %d\n", side);
     }
+
     assert(side == 0 || side == 1);
     assert(square > -1 && square < 64);
 #endif
@@ -1151,8 +1146,11 @@ void Skunk::generate_moves(t_moves &moves_list)
 int Skunk::get_piece(int square) {
     int type = -1;
     U64 mask = (1ULL << square);
-    for (type=P; type<=k; type++) {
-        if (bitboards[type] & mask) break;
+    for (int piece=P; piece<=k; piece++) {
+        if (bitboards[piece] & mask) {
+            type = piece;
+            break;
+        }
     }
     return type;
 }
@@ -1204,436 +1202,6 @@ U64 Skunk::get_attacks(int piece, int square, int side) {
     return attacks;
 }
 
-// generate all t_moves
-void Skunk::generate_moves_old(t_moves &moves_list)
-{
-    // init move count
-    moves_list.count = 0;
-
-    // define source & target squares
-    int source_square = 0, target_square = 0;
-
-    // define current piece's bitboard copy & it's attacks
-    U64 bitboard = 0ULL, attacks = 0ULL;
-
-    // loop over all the bitboards
-    for (int piece = P; piece <= k; piece++)
-    {
-        // init piece bitboard copy
-        bitboard = bitboards[piece];
-
-        // generate white pawns & white king castling t_moves
-        if (side == white)
-        {
-            // pick up white pawn bitboards index
-            if (piece == P)
-            {
-                // loop over white pawns within white pawn bitboard
-                while (bitboard)
-                {
-                    // init source square
-                    source_square = get_ls1b_index(bitboard);
-
-                    // init target square
-                    target_square = source_square - 8;
-
-                    // generate quite pawn t_moves
-                    if (!(target_square < a8) && !get_bit(occupancies[both], target_square))
-                    {
-                        // pawn promotion
-                        if (source_square >= a7 && source_square <= h7)
-                        {
-                            add_move(moves_list, encode_move(source_square, target_square, piece, Q, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, R, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, B, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, N, 0, 0));
-                        }
-
-                        else
-                        {
-                            // one square ahead pawn move
-                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                            // two squares ahead pawn move
-                            if ((source_square >= a2 && source_square <= h2) && !get_bit(occupancies[both], target_square - 8))
-                                add_move(moves_list, encode_move(source_square, (target_square - 8), piece, 0, 0, 0));
-                        }
-                    }
-
-                    // init pawn attacks bitboard
-                    attacks = pawn_masks[side][source_square] & occupancies[black];
-
-                    // generate pawn captures
-                    while (attacks)
-                    {
-                        // init target square
-                        target_square = get_ls1b_index(attacks);
-
-                        // pawn promotion
-                        if (source_square >= a7 && source_square <= h7)
-                        {
-                            add_move(moves_list, encode_move(source_square, target_square, piece, Q, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, R, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, B, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, N, 0, 0));
-                        }
-
-                        else
-                            // one square ahead pawn move
-                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                        // pop ls1b of the pawn attacks
-                        pop_bit(attacks, target_square);
-                    }
-
-                    // generate enpassant captures
-                    if (enpassant != no_square)
-                    {
-                        // lookup pawn attacks and bitwise AND with enpassant square (bit)
-                        U64 enpassant_attacks = pawn_masks[side][source_square] & (1ULL << enpassant);
-
-                        // make sure enpassant capture available
-                        if (enpassant_attacks)
-                        {
-                            // init enpassant capture target square
-                            int target_enpassant = get_ls1b_index(enpassant_attacks);
-                            add_move(moves_list, encode_move(source_square, target_enpassant, piece, 0, 1, 0));
-                        }
-                    }
-
-                    // pop ls1b from piece bitboard copy
-                    pop_bit(bitboard, source_square);
-                }
-            }
-
-            // castling t_moves
-            if (piece == K)
-            {
-                // king side castling is available
-                if (castle & wk)
-                {
-                    // make sure square between king and king's rook are empty
-                    if (!get_bit(occupancies[both], f1) && !get_bit(occupancies[both], g1))
-                    {
-                        // make sure king and the f1 squares are not under attacks
-                        if (!is_square_attacked(e1, black) && !is_square_attacked(f1, black))
-                            add_move(moves_list, encode_move(e1, g1, piece, 0, 0, 1));
-                    }
-                }
-
-                // queen side castling is available
-                if (castle & wq)
-                {
-                    // make sure square between king and queen's rook are empty
-                    if (!get_bit(occupancies[both], d1) && !get_bit(occupancies[both], c1) && !get_bit(occupancies[both], b1))
-                    {
-                        // make sure king and the d1 squares are not under attacks
-                        if (!is_square_attacked(e1, black) && !is_square_attacked(d1, black))
-                            add_move(moves_list, encode_move(e1, c1, piece, 0, 0, 1));
-                    }
-                }
-            }
-        }
-
-            // generate black pawns & black king castling t_moves
-        else
-        {
-            // pick up black pawn bitboards index
-            if (piece == p)
-            {
-                // loop over white pawns within white pawn bitboard
-                while (bitboard)
-                {
-                    // init source square
-                    source_square = get_ls1b_index(bitboard);
-
-                    // init target square
-                    target_square = source_square + 8;
-
-                    // generate quite pawn t_moves
-                    if (!(target_square > h1) && !get_bit(occupancies[both], target_square))
-                    {
-                        // pawn promotion
-                        if (source_square >= a2 && source_square <= h2)
-                        {
-                            add_move(moves_list, encode_move(source_square, target_square, piece, q,  0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, r,  0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, b,  0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, n,  0, 0));
-                        }
-
-                        else
-                        {
-                            // one square ahead pawn move
-                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                            // two squares ahead pawn move
-                            if ((source_square >= a7 && source_square <= h7) && !get_bit(occupancies[both], target_square + 8))
-                                add_move(moves_list, encode_move(source_square, (target_square + 8), piece, 0, 0, 0));
-                        }
-                    }
-
-                    // init pawn attacks bitboard
-                    attacks = pawn_masks[side][source_square] & occupancies[white];
-
-                    // generate pawn captures
-                    while (attacks)
-                    {
-                        // init target square
-                        target_square = get_ls1b_index(attacks);
-
-                        // pawn promotion
-                        if (source_square >= a2 && source_square <= h2)
-                        {
-                            add_move(moves_list, encode_move(source_square, target_square, piece, q, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, r, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, b, 0, 0));
-                            add_move(moves_list, encode_move(source_square, target_square, piece, n, 0, 0));
-                        }
-
-                        else
-                            // one square ahead pawn move
-                            add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                        // pop ls1b of the pawn attacks
-                        pop_bit(attacks, target_square);
-                    }
-
-                    // generate enpassant captures
-                    if (enpassant != no_square)
-                    {
-                        // lookup pawn attacks and bitwise AND with enpassant square (bit)
-                        U64 enpassant_attacks = pawn_masks[side][source_square] & (1ULL << enpassant);
-
-                        // make sure enpassant capture available
-                        if (enpassant_attacks)
-                        {
-                            // init enpassant capture target square
-                            int target_enpassant = get_ls1b_index(enpassant_attacks);
-                            add_move(moves_list, encode_move(source_square, target_enpassant, piece, 0, 1, 0));
-                        }
-                    }
-
-                    // pop ls1b from piece bitboard copy
-                    pop_bit(bitboard, source_square);
-                }
-            }
-
-            // castling t_moves
-            if (piece == k)
-            {
-                // king side castling is available
-                if (castle & bk)
-                {
-                    // make sure square between king and king's rook are empty
-                    if (!get_bit(occupancies[both], f8) && !get_bit(occupancies[both], g8))
-                    {
-                        // make sure king and the f8 squares are not under attacks
-                        if (!is_square_attacked(e8, white) && !is_square_attacked(f8, white))
-                            add_move(moves_list, encode_move(e8, g8, piece, 0, 0, 1));
-                    }
-                }
-
-                // queen side castling is available
-                if (castle & bq)
-                {
-                    // make sure square between king and queen's rook are empty
-                    if (!get_bit(occupancies[both], d8) && !get_bit(occupancies[both], c8) && !get_bit(occupancies[both], b8))
-                    {
-                        // make sure king and the d8 squares are not under attacks
-                        if (!is_square_attacked(e8, white) && !is_square_attacked(d8, white))
-                            add_move(moves_list, encode_move(e8, c8, piece, 0, 0, 1));
-                    }
-                }
-            }
-        }
-
-        // genarate knight t_moves
-        if ((side == white) ? piece == N : piece == n)
-        {
-            // loop over source squares of piece bitboard copy
-            while (bitboard)
-            {
-                // init source square
-                source_square = get_ls1b_index(bitboard);
-
-                // init piece attacks in order to get set of target squares
-                attacks = knight_masks[source_square] & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
-
-                // loop over target squares available from generated attacks
-                while (attacks)
-                {
-                    // init target square
-                    target_square = get_ls1b_index(attacks);
-
-                    // quite move
-                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    else
-                        // capture move
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    // pop ls1b in current attacks set
-                    pop_bit(attacks, target_square);
-                }
-
-
-                // pop ls1b of the current piece bitboard copy
-                pop_bit(bitboard, source_square);
-            }
-        }
-
-        // generate bishop t_moves
-        if ((side == white) ? piece == B : piece == b)
-        {
-            // loop over source squares of piece bitboard copy
-            while (bitboard)
-            {
-                // init source square
-                source_square = get_ls1b_index(bitboard);
-
-                // init piece attacks in order to get set of target squares
-                attacks = get_bishop_attacks(source_square, occupancies[both]) & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
-
-
-                // loop over target squares available from generated attacks
-                while (attacks)
-                {
-                    // init target square
-                    target_square = get_ls1b_index(attacks);
-
-                    // quite move
-                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    else
-                        // capture move
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    // pop ls1b in current attacks set
-                    pop_bit(attacks, target_square);
-                }
-
-
-                // pop ls1b of the current piece bitboard copy
-                pop_bit(bitboard, source_square);
-            }
-        }
-
-        // generate rook t_moves
-        if ((side == white) ? piece == R : piece == r)
-        {
-            // loop over source squares of piece bitboard copy
-            while (bitboard)
-            {
-                // init source square
-                source_square = get_ls1b_index(bitboard);
-
-                // init piece attacks in order to get set of target squares
-                attacks = get_rook_attacks(source_square, occupancies[both]) & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
-
-                // loop over target squares available from generated attacks
-                while (attacks)
-                {
-                    // init target square
-                    target_square = get_ls1b_index(attacks);
-
-                    // quite move
-                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square)) {
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    }
-
-                    else
-                        // capture move
-                    {
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-                    }
-
-                    // pop ls1b in current attacks set
-                    pop_bit(attacks, target_square);
-                }
-
-
-                // pop ls1b of the current piece bitboard copy
-                pop_bit(bitboard, source_square);
-            }
-        }
-
-        // generate queen t_moves
-        if ((side == white) ? piece == Q : piece == q)
-        {
-            // loop over source squares of piece bitboard copy
-            while (bitboard)
-            {
-                // init source square
-                source_square = get_ls1b_index(bitboard);
-
-                // init piece attacks in order to get set of target squares
-                attacks = get_queen_attacks(source_square, occupancies[both]) & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
-
-                // loop over target squares available from generated attacks
-                while (attacks)
-                {
-                    // init target square
-                    target_square = get_ls1b_index(attacks);
-
-                    // quite move
-                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    else
-                        // capture move
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    // pop ls1b in current attacks set
-                    pop_bit(attacks, target_square);
-                }
-
-
-                // pop ls1b of the current piece bitboard copy
-                pop_bit(bitboard, source_square);
-            }
-        }
-
-        // generate king t_moves
-        if ((side == white) ? piece == K : piece == k)
-        {
-            // loop over source squares of piece bitboard copy
-            while (bitboard)
-            {
-                // init source square
-                source_square = get_ls1b_index(bitboard);
-
-                // init piece attacks in order to get set of target squares
-                attacks = king_masks[source_square] & ((side == white) ? ~occupancies[white] : ~occupancies[black]);
-
-                // loop over target squares available from generated attacks
-                while (attacks)
-                {
-                    // init target square
-                    target_square = get_ls1b_index(attacks);
-
-                    // quite move
-                    if (!get_bit(((side == white) ? occupancies[black] : occupancies[white]), target_square))
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    else
-                        // capture move
-                        add_move(moves_list, encode_move(source_square, target_square, piece, 0, 0, 0));
-
-                    // pop ls1b in current attacks set
-                    pop_bit(attacks, target_square);
-                }
-
-                // pop ls1b of the current piece bitboard copy
-                pop_bit(bitboard, source_square);
-            }
-        }
-    }
-}
-
 void Skunk::add_move(t_moves &moves_list, int move) {
     // check if it is a legal move
     moves_list.moves[moves_list.count] = move;
@@ -1671,6 +1239,9 @@ void Skunk::test_moves_sort() {
 }
 
 void Skunk::sort_moves(t_moves &moves_list) {
+    /****************************************\
+     *             SCORE MOVES
+    \****************************************/
     // do an insertion sort for best-case O(n) time
     int scores[moves_list.count];
     // compute the scores for each move
@@ -1678,6 +1249,9 @@ void Skunk::sort_moves(t_moves &moves_list) {
         scores[i] = score_move(moves_list.moves[i]);
     }
 
+    /****************************************\
+     *             INSERTION SORT
+    \****************************************/
     for (int i=1; i<moves_list.count; i++) {
         int score = scores[i];
         int move = moves_list.moves[i];
@@ -1695,18 +1269,30 @@ void Skunk::sort_moves(t_moves &moves_list) {
 
 int Skunk::score_move(int move) {
 
+    int score = 0;
+
     // check if the move exists in the previous search results
     if (ply < previous_pv_line.cmove && move == previous_pv_line.argmove[ply]) {
-        return 20000;
+        score += 20000;
     }
 
+    // consult the lookup table
+    int piece = decode_piece(move);
+    int victim = get_piece(decode_destination(move));
+
+
+
+    if (decode_promoted(move)) {
+        // we want to check promotions high as well
+        score += 5000;
+
+    }
 
     if (is_capture(move)) {
-        // consult the lookup table
-        int attacker = decode_piece(move);
-        int victim = get_piece(decode_destination(move));
-        return mvv_lva[attacker][victim] + 10000;
+        score += mvv_lva[piece][victim] + 10000;
     } else {
+
+#ifdef KILLER_HISTORY
         // score killer move 1
         if (ply < MAX_PLY && killer_moves[0][ply] == move) {
             return 9000;
@@ -1718,28 +1304,11 @@ int Skunk::score_move(int move) {
 
         // score history move
         return history_moves[side][decode_source(move)][decode_destination(move)];
-    }
-    return 0;
-}
+#endif
 
-
-int Skunk::is_checkmate() {
-    t_moves moves_list;
-
-    generate_moves(moves_list);
-    int legal_moves = 0;
-    for (int i=0; i<moves_list.count; i++) {
-        copy_board();
-        if (!make_move(moves_list.moves[i], all_moves)) {
-            continue;
-        }
-        restore_board();
-        legal_moves++;
     }
-    if (legal_moves == 0 && is_check()) {
-        return 1;
-    }
-    return 0;
+
+    return score;
 }
 
 int Skunk::is_check() {
@@ -1750,22 +1319,42 @@ void Skunk::write_hash_entry(int score, int depth, int move, int flag) {
 #ifdef TRANSPOSITION_TABLE
     t_entry  *entry = &transposition_table[zobrist % HASH_SIZE];
 
-    // adjust mating scores ? not needed...actaully ends up ruining the score for some reason
+    // adjust mating scores ? not needed...actaully ends up not able to find mate for some reason
 //    if (score < -CHECKMATE + 1000) score += ply;
 //    if (score > CHECKMATE - 1000) score -= ply;
 
+
+// TESTS DONE AT SIZE hash_size 399990
+// ALWAYS REPLACE
+// info transpositions 2131 ttp: 0.0034 score cp 20 depth 7 nodes 618580 q_nodes 671624 time 522 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
+
+// PRIORITIZE MORE NODES
+// info transpositions 2131 ttp: 0.0034 score cp 20 depth 7 nodes 618580 q_nodes 671624 time 533 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
+
+// PRIORITIZE LESS NODES (closer to root)
+// info transpositions 5260 ttp: 0.0085 score cp 20 depth 7 nodes 622165 q_nodes 672264 time 501 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
+
+// DEPTH PREFERRED (choose larger depth)
+// info transpositions 1977 ttp: 0.0032 score cp 20 depth 7 nodes 618463 q_nodes 671599 time 494 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
+
+// DEPTH NOT PREFERRED (choose lower depth)
+// info transpositions 5263 ttp: 0.0085 score cp 20 depth 7 nodes 622161 q_nodes 672248 time 474 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
+
+
+
+    // if there is a clash, choose the TT with the higher nodes searched
     entry->score = score;
     entry->depth = depth;
     entry->hash = zobrist;
     entry->move = move;
     entry->flags = flag;
+    entry->nodes = nodes;
 #endif
 }
 
 int Skunk::quiesence(int alpha, int beta) {
 
-    nodes ++;
-
+    q_nodes ++;
     if (force_stop) return 0;
 
     // check if we should return or not
@@ -1773,19 +1362,22 @@ int Skunk::quiesence(int alpha, int beta) {
         communicate();
     }
 
-    t_moves moves_list;
-
-    generate_moves(moves_list);
-
     int evaluation = evaluate();
 
+#ifdef ALPHA_BETA
     if (evaluation >= beta) {
         return evaluation;
     }
+#endif
+
 
     if (evaluation > alpha) {
         alpha = evaluation;
     }
+
+    t_moves moves_list;
+
+    generate_moves(moves_list);
 
     sort_moves(moves_list);
 
@@ -1797,6 +1389,16 @@ int Skunk::quiesence(int alpha, int beta) {
 
         int move = moves_list.moves[i];
 
+        if (!is_capture(move)) continue;
+
+#ifdef FUTILITY_PRUNE
+        // futility pruning. If the piece we are capturing does not help us improve, just ignore going down this branch + some margin for error (two queens)
+        int victim = get_piece(decode_destination(move));
+
+        if (!is_check() && (abs(piece_scores[victim]) + evaluation + piece_scores[Q]*10) < alpha) {
+            return alpha;
+        }
+#endif
 
         make_move(move, only_captures);
 
@@ -1809,9 +1411,11 @@ int Skunk::quiesence(int alpha, int beta) {
 #endif
         restore_board();
 
+#ifdef ALPHA_BETA
         if (score >= beta) {
             return beta;
         }
+#endif
 
         if (score > alpha) {
             alpha = score;
@@ -1823,7 +1427,7 @@ int Skunk::quiesence(int alpha, int beta) {
 
 
 
-int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_line *pline) {
+int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
 
     nodes ++ ;
 
@@ -1834,29 +1438,40 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 
     if (force_stop) return 0;
 
-    /*
-     * Check for repetitions (does not work for some reason?)
-     */
-    if (ply && is_repitition()) {
-        return -evaluate()*0.1; // instead of returning just a draw score, include a contempt factor (simply evaluate x weight). If white is losing, we want to draw so invert eval
-    }
+    t_moves moves_list;
 
-    /*
-     * Base case
-     * Here we need to set the number of moves in our PV to 0 so that when collapsing up the tree the number of moves in cmove is correct
-     * (otherwise it could have too large of a number from a previous search and segfault)
-     */
+    generate_moves(moves_list);
+
+    sort_moves(moves_list);
+
+    // base case
     if (depth < 1) {
         if (pline != NULL) pline->cmove = 0;
-        int evaluation = quiesence(alpha, beta); // limit quiescence search to depth 8 (currently it does not limit)
-        return evaluation;
+        return quiesence(alpha, beta);
     }
 
-    t_line line = {.cmove = 0 };
-    int score = INT_MIN;
 
+    // checkmate / stalemate
     int check = is_check();
-    // increase the depth if we are in check, don't want to miss any tactics
+    if (moves_list.count == 0) {
+        if (check) {
+            return (-CHECKMATE) + ply;
+        } else return 0;
+    }
+
+
+
+    // 3-fold repetition
+    if (ply && is_repitition()) {
+        return -evaluate()*0.1; // instead of returning just a draw best_score, include a contempt factor (simply evaluate x weight). If white is losing, we want to draw so invert eval
+    }
+
+
+    t_line line = {.cmove = 0 };
+
+    int best_score = INT_MIN, best_move = 0, current_move, current_score;
+
+    // check extension
     if (check) depth ++;
 
 
@@ -1869,7 +1484,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
      * Check if there is a valid transposition table entry that we can use instead
      * Try to get a transposition table entry and check its relationship with alpha, beta.
      * We might have to restore alpha, beta instead of exact value.
-     * If we find an exact value and the ply is 1, we need to send move to principle variation line
+     * If we find an exact value and the ply is 1, we need to send current_move to principle variation line
      */
     t_entry *entry = &transposition_table[zobrist % HASH_SIZE];
 
@@ -1882,11 +1497,11 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
             case HASH_EXACT:
                 cache_hit++;
                 /*
-                 * If the ply is 0 and we find a hit we need to send move to principle variation line so it has a move
-                 * However, if the ply is greater than one we do not NEED to put move in PV line.
+                 * If the ply is 0 and we find a hit we need to send current_move to principle variation line so it has a current_move
+                 * However, if the ply is greater than one we do not NEED to put current_move in PV line.
                  */
                 if (ply == 0 && pline != NULL) {
-                    // write the move to our PV line
+                    // write the current_move to our PV line
                     pline->argmove[0] = entry->move;
                     memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                     pline->cmove = line.cmove + 1;
@@ -1901,10 +1516,6 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
                 break;
         }
 
-
-        /*
-         * This call will never happen at the root since alpha = -INF and bet = INF. There needs to be further search for pruning
-         */
         if (alpha >= beta) {
             cache_hit++;
             return score;
@@ -1916,7 +1527,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
     int fail_high = 0;
 
     if (!check && (!verify || depth > 1) && do_null == DO_NULL) {
-        // make null move
+        // make null current_move
         copy_board();
         side ^= 1;
         zobrist ^= side_key;
@@ -1939,7 +1550,7 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 #endif
 #ifdef NULL_MOVE
     /*
-     * Lets do some null move pruning here to see if our opponent has a response to this move
+     * Lets do some null current_move pruning here to see if our opponent has a response to this current_move
      */
     if (do_null==DO_NULL && !check && ply && depth >= NULL_R + 1) {
         // switch sides
@@ -1950,41 +1561,26 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
         enpassant = no_square;
         /*
          * Here we make a call to negamax again, so our opponent makes two moves in a row.
-         * We do not want this move to contribute to our PV, so we pass null in for that arg
+         * We do not want this current_move to contribute to our PV, so we pass null in for that arg
          */
-        int score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, verify, NO_NULL, NULL);
+        int best_score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, verify, NO_NULL, NULL);
         side ^= 1;
         restore_board();
-        if (score >= beta) {
+        if (best_score >= beta) {
 //            depth -= NULL_R;
             return  beta;
         }
     }
 #endif
 
-   /*
-    * Here we actually loop through all of our moves and make each one, checking if it is valid, and doing it
-    * Maybe quiescence search can use this same negamax function with different flag?
-    */
-
-    t_moves moves_list;
-
-    generate_moves(moves_list);
-
-    sort_moves(moves_list);
-
-    int searched_moves = 0;
-
-    int best = 0;
-
     copy_board();
 
-    // loop through each move
+    // loop through each current_move
     for (int i = 0; i<moves_list.count; i++) {
 
-        int move = moves_list.moves[i];
+        current_move = moves_list.moves[i];
 
-        make_move(move, all_moves);
+        make_move(current_move, all_moves);
 
 #ifdef DEBUG
         assert(zobrist == generate_zobrist());
@@ -1994,37 +1590,34 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 
         repitition.table[repitition.count++] = zobrist;
 
-        int test;
 
-        /*
-         * If we have not eval a node yet, we do so here
-         */
         search:
-        if (searched_moves == 0) {
-            test = -negamax(-beta, -alpha, depth -1, verify, DO_NULL, &line);
-        } else {
+        if (i == 0) {
+            current_score = -negamax(-beta, -alpha, depth -1, verify, DO_NULL, &line);
+        }
+        else {
             // LMR
-            if (searched_moves > 3 && depth > 2 && !check && is_capture(move) && decode_promoted(move) == 0) {
+            if (i > 3 && depth > 2 && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
                 int LMR_R = 2;
-                test = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, NULL);
-            } else test = alpha + 1;
+                current_score = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, NULL);
+            } else current_score = alpha + 1;
 
             // PVS
-            if (test > alpha)
+            if (current_score > alpha)
             {
-                test = -negamax(-alpha - 1, -alpha, depth - 1, verify,NO_NULL, NULL);
-                if (test > alpha && test < beta) test = -negamax(-beta, -alpha, depth - 1, verify,DO_NULL, &line);
+                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify,NO_NULL, NULL);
+                if (current_score > alpha && current_score < beta) current_score = -negamax(-beta, -alpha, depth - 1, verify,DO_NULL, &line);
             }
         }
 
-        if (test > score) {
-            score = test;
-            best = move;
+        if (current_score > best_score) {
+            best_score = current_score;
+            best_move = current_move;
         }
 
 #ifdef VERIFIED_NULL_MOVE
         // check if zugzwang is detected, if so, re-search with increased depth
-        if (fail_high && score < beta) {
+        if (fail_high && best_score < beta) {
             depth++;
             fail_high = false;
             verify = 1;
@@ -2033,55 +1626,50 @@ int Skunk::negamax(int alpha, int beta,int depth, int verify, int do_null, t_lin
 #endif
 
         restore_board();
-        searched_moves ++;
         ply --;
         repitition.count--;
 
-        if (score > alpha) {
-            alpha = score;
-            // write the move to our PV line
+        if (best_score > alpha) {
+            alpha = best_score;
+            // write the current_move to our PV line
             if (pline != NULL) {
-                pline->argmove[0] = move;
+                pline->argmove[0] = current_move;
                 memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                 pline->cmove = line.cmove + 1;
             }
         }
 
         // beta cutoff
-        if (score >= beta) {
+        if (alpha >= beta) {
+
+#ifdef KILLER_HISTORY
             // ADD mask ply check here to avoid segfaults
-            if (!is_capture(move) && ply < MAX_PLY) {
-                history_moves[side][decode_source(move)][decode_destination(move)] += depth*depth;
+            if (!is_capture(current_move) && ply < MAX_PLY) {
+                history_moves[side][decode_source(current_move)][decode_destination(current_move)] += depth*depth;
                 killer_moves[1][ply] = killer_moves[0][ply];
-                killer_moves[0][ply] = move;
+                killer_moves[0][ply] = current_move;
             }
+#endif
 
-            write_hash_entry(beta, depth, best, HASH_LOWERBOUND);
+            write_hash_entry(beta, depth, best_move, HASH_LOWERBOUND);
 
+#ifdef ALPHA_BETA
             return beta;
+#endif
         }
     }
-
-    // check for checkmate or stalemate
-    if (searched_moves == 0 ) {
-        if (check) {
-            score = (-CHECKMATE + ply);
-        }
-        else score = 0;
-    }
-
 
     /*
-     * We update our transposition table entry to reflect current score of node, etc.
+     * We update our transposition table entry to reflect current best_score of node, etc.
      */
 #ifdef TRANSPOSITION_TABLE
     int flag = HASH_EXACT;
-    if (score <= _alpha) flag = HASH_UPPERBOUND;
-    else if (score >= beta) flag = HASH_LOWERBOUND;
-    write_hash_entry(score, depth, best, flag);
+    if (best_score <= _alpha) flag = HASH_UPPERBOUND;
+    else if (best_score >= beta) flag = HASH_LOWERBOUND;
+    write_hash_entry(best_score, depth, best_move, flag);
 #endif
 
-    return score;
+    return best_score;
 }
 
 
@@ -2100,11 +1688,12 @@ int Skunk::search(int maxDepth) {
     force_stop = 0;
 
     int score, useable_depth;
+    cache_hit = 0;
+    q_nodes = 0;
+    nodes = 0;
+
     for (int depth = 1; depth <= maxDepth; depth++) {
-        quiesence_moves = 0;
-        nodes=0;
-        cache_miss = 0;
-        cache_hit = 0;
+
         ply = 0;
         pline.cmove = 0;
 
@@ -2117,7 +1706,8 @@ int Skunk::search(int maxDepth) {
         previous_pv_line = pline;
         score = test;
         useable_depth = depth;
-        // save the pv line
+
+
     }
 
     if (UCI_AnalyseMode)
@@ -2126,11 +1716,11 @@ int Skunk::search(int maxDepth) {
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
 
         if (score < -CHECKMATE + 2000) {
-            printf("info score mate %d depth %d nodes %d time %ld pv ", -(score + CHECKMATE) / 2 - 1, useable_depth, nodes + quiesence_moves, elapsed);
+            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, useable_depth, nodes, q_nodes, elapsed);
         } else if (score > CHECKMATE - 2000) {
-            printf("info score mate %d depth %d nodes %d time %ld pv ", (CHECKMATE - score) / 2 + 1, useable_depth, nodes + quiesence_moves, elapsed);
+            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, useable_depth, nodes, q_nodes, elapsed);
         } else {
-            printf("info score cp %d depth %d nodes %d time %ld pv ", score, useable_depth, nodes + quiesence_moves, elapsed);
+            printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, useable_depth, nodes, q_nodes, elapsed);
         }
 
 
@@ -2155,7 +1745,6 @@ int Skunk::evaluate() {
 
 
     // simply evaluates the piece scores
-
     U64 bitboard;
     int score = 0;
     for (int piece = P; piece <= k; piece++) {
@@ -2181,13 +1770,16 @@ int Skunk::evaluate() {
                 case r: score -= rook_score[mirror_score[square]]; break;
                 case k: score -= king_score[mirror_score[square]]; break;
             }
-            score += piece_scores[piece]*10;
 
-            pop_bit(bitboard, square);
+            score += piece_scores[piece] * 10;
+
+            pop_lsb(bitboard);
         }
     }
 
-    return side==white?score:-score;
+    score /= 10;
+
+    return (side==white?score:-score);
 }
 
 int Skunk::coordinate_to_square(char *coordinate) {
@@ -2409,9 +2001,6 @@ void Skunk::perft_test_helper(int depth) {
     t_moves valid = {.count = 0};
 
     generate_moves(new_moves);
-//    generate_moves_old(psuedo);
-
-    // check to make sure they are both the same
 
     copy_board();
     int made_moves = 0;
@@ -2435,10 +2024,6 @@ void Skunk::perft_test_helper(int depth) {
 
         make_move(move, all_moves);
 
-//        if (is_square_attacked((side == white) ? get_ls1b_index(bitboards[k]) : get_ls1b_index(bitboards[K]), side)) {
-//            restore_board();
-//            continue;
-//        }
 
         valid.moves[valid.count++] = move;
 
@@ -2483,10 +2068,7 @@ int Skunk::is_repitition() {
         int promoted = decode_promoted(move);
 
         pop_bit(bitboards[piece], source);
-        set_bit(bitboards[piece], target);
-
         zobrist ^= piece_keys[piece][source];
-        zobrist ^= piece_keys[piece][target];
 
         int pawn = P, knight = N, king = K, queen = Q, bishop = B, rook = R;
         U64 *opponent_bitboards = bitboards + 6;
@@ -2495,25 +2077,22 @@ int Skunk::is_repitition() {
             pawn = p, knight = n, king = k, queen = q, bishop = b, rook = r;
         }
 
-        if (is_capture(move)) {
-            for (int piece = P; piece <= K; piece++) {
-                if (get_bit(opponent_bitboards[piece], target)) {
-                    // remove piece from bitboard
-#ifdef DEBUG
-                    assert(piece != K && piece != k);
-#endif
-                    pop_bit(opponent_bitboards[piece], target);
+        int victim = get_piece(target);
 
-                    // remove the piece from the board hash
-                    zobrist ^= piece_keys[piece][target];
-                    break;
-                }
-            }
+        if (victim > -1) {
+            pop_bit(bitboards[victim], target);
+            piece_count[victim] --;
+            zobrist ^= piece_keys[victim][target];
         }
+
+        set_bit(bitboards[piece], target);
+        zobrist ^= piece_keys[piece][target];
 
         if (promoted) {
             pop_bit(bitboards[pawn], target);
             set_bit(bitboards[promoted], target);
+            piece_count[pawn] --;
+            piece_count[promoted] ++;
             zobrist ^= piece_keys[pawn][target];
             zobrist ^= piece_keys[promoted][target];
         }
@@ -2521,9 +2100,11 @@ int Skunk::is_repitition() {
         if (enp) {
             if (side == white) {
                 pop_bit(bitboards[p], target + 8);
+                piece_count[p] --;
                 zobrist ^= piece_keys[p][target + 8];
             } else {
                 pop_bit(bitboards[P], target - 8);
+                piece_count[P] --;
                 zobrist ^= piece_keys[P][target - 8];
             }
         }

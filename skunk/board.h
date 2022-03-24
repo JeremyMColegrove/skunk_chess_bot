@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include "masks.h"
+#include "piece_tables.h"
 #ifdef _WIN32
 #include <conio.h>
 #include <Windows.h>
@@ -23,14 +25,49 @@
 
 // flag for enabling asserts in the code for debugging and error checking i.e. zobrist key checking
 //#define DEBUG
+
 // flag for enabling the transposition table
 #define TRANSPOSITION_TABLE
-// flag for enabling NULL MOVE in negamax
+
+// transposition table size
+#define HASH_SIZE 399990
+
+// flag for enabling futility pruning in quiescence search
+//#define FUTILITY_PRUNE
+
+// flag for enabling NULL MOVE in negamax (DEPRECATED. USE VERIFIED NULL MOVE INSTEAD)
 //#define NULL_MOVE
+
+// flag for verified null move pruning
 #define VERIFIED_NULL_MOVE
 
+// flag for killer and history move orderings
+#define KILLER_HISTORY
 
-//Some macros for getting and setting bits
+// alpha beta flag
+#define ALPHA_BETA
+
+
+/*********************\
+       CONSTANTS
+\*********************/
+
+#define MAX_PLY 72
+#define CHECKMATE 500000
+#define NULL_R 3
+#define DO_NULL 1
+#define NO_NULL 0
+#define HASH_EXACT 0
+#define HASH_LOWERBOUND 1
+#define HASH_UPPERBOUND 2
+#define SEARCH_DEPTH 0
+#define SEARCH_MOVETIME 1
+
+
+/*********************\
+    BITWISE MACROS
+\*********************/
+
 //Returns the bit on the square
 #define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
 
@@ -61,274 +98,35 @@
 #define decode_destination(move) (((move) & 0xfc0) >> 6)
 #define decode_piece(move) (((move) & 0xf000) >> 12)
 #define decode_promoted(move) (((move) & 0xf0000) >> 16)
-//#define decode_capture(move) ((move) & 0x100000)
-//#define decode_double(move) ((move) & 0x200000)
 #define is_capture(move) ((1ULL << decode_destination(move)) & occupancies[side ^ 1] || decode_enpassant(move))
 #define decode_enpassant(move) ((move) & 0x400000)
 #define decode_castle(move) ((move) & 0x800000)
 
 
-#define MAX_PLY 72
-#define CHECKMATE 500000
-#define NULL_R 3
-#define NO_VALUE 9999999
-#define DO_NULL 1
-#define NO_NULL 0
-// transposition table definitions
-//#define HASH_SIZE 3999971 //~4 MB (must be prime) for actual games
-#define HASH_SIZE 3999971 // small amount for testing
-#define HASH_EXACT 0
-#define HASH_LOWERBOUND 1
-#define HASH_UPPERBOUND 2
-
-
-#define SEARCH_DEPTH 0
-#define SEARCH_MOVETIME 1
-
-
-
 #define copy_board() \
 U64 bitboards_copy[12], occupancies_copy[3]; \
-int castle_copy=0, side_copy=0, enpassant_copy=0; \
+int castle_copy=0, side_copy=0, enpassant_copy=0, piece_count_copy[12]; \
 memcpy(bitboards_copy, bitboards, sizeof(bitboards)); \
 memcpy(occupancies_copy, occupancies, sizeof(occupancies)); \
+memcpy(piece_count_copy, piece_count, sizeof(piece_count));                     \
 enpassant_copy = enpassant; castle_copy = castle; side_copy = side; \
 U64 zobrist_copy = zobrist; \
 
 #define restore_board() \
     memcpy(bitboards, bitboards_copy, sizeof(bitboards)); \
     memcpy(occupancies, occupancies_copy,  sizeof(occupancies)); \
+    memcpy(piece_count, piece_count_copy, sizeof(piece_count));                    \
     enpassant = enpassant_copy; castle = castle_copy; side = side_copy; \
     zobrist = zobrist_copy; \
-//move types
+
+
+
+/*********************\
+     ENUMERATIONS
+\*********************/
+
 enum {all_moves, only_captures};
 
-/**
-8		1  1  1  1  1  1  1  1
-7		1  1  1  1  1  1  1  1
-6		1  1  1  1  1  1  1  1
-5		1  1  1  1  1  1  1  1
-4		1  1  1  1  1  1  1  1
-3		1  1  1  1  1  1  1  1
-2		1  1  1  1  1  1  1  1
-1		1  1  1  1  1  1  1  1
-
-		a  b  c  d  e  f  g  h
-		Board number: 18446744073709551615
- */
-#define no_mask 18446744073709551615
-/**
- *          not_a_file
- *  8    	0  1  1  1  1  1  1  1
-    7		0  1  1  1  1  1  1  1
-    6		0  1  1  1  1  1  1  1
-    5		0  1  1  1  1  1  1  1
-    4		0  1  1  1  1  1  1  1
-    3		0  1  1  1  1  1  1  1
-    2		0  1  1  1  1  1  1  1
-    1		0  1  1  1  1  1  1  1
-
-            a  b  c  d  e  f  g  h
- */
-#define not_a_file 18374403900871474942ULL
-
-/**
- *          not_h_file
- *  8		1  1  1  1  1  1  1  0
-    7		1  1  1  1  1  1  1  0
-    6		1  1  1  1  1  1  1  0
-    5		1  1  1  1  1  1  1  0
-    4		1  1  1  1  1  1  1  0
-    3		1  1  1  1  1  1  1  0
-    2		1  1  1  1  1  1  1  0
-    1		1  1  1  1  1  1  1  0
-
-            a  b  c  d  e  f  g  h
- */
-#define not_h_file 9187201950435737471ULL
-
-
-/**
- *          not_gh_file
- * 8		1  1  1  1  1  1  0  0
-    7		1  1  1  1  1  1  0  0
-    6		1  1  1  1  1  1  0  0
-    5		1  1  1  1  1  1  0  0
-    4		1  1  1  1  1  1  0  0
-    3		1  1  1  1  1  1  0  0
-    2		1  1  1  1  1  1  0  0
-    1		1  1  1  1  1  1  0  0
-
-            a  b  c  d  e  f  g  h
- */
-#define not_gh_file 4557430888798830399ULL
-
-/**
- *          not_ab_file
- * 8		0  0  1  1  1  1  1  1
-    7		0  0  1  1  1  1  1  1
-    6		0  0  1  1  1  1  1  1
-    5		0  0  1  1  1  1  1  1
-    4		0  0  1  1  1  1  1  1
-    3		0  0  1  1  1  1  1  1
-    2		0  0  1  1  1  1  1  1
-    1		0  0  1  1  1  1  1  1
-
-            a  b  c  d  e  f  g  h
- */
-#define not_ab_file 18229723555195321596ULL
-
-/**
- * row2 for double pawn pushes
-8		0  0  0  0  0  0  0  0
-7		0  0  0  0  0  0  0  0
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		1  1  1  1  1  1  1  1
-1		0  0  0  0  0  0  0  0
-
-		a  b  c  d  e  f  g  h
- */
-
-#define row2 71776119061217280ULL
-
-/**
- * row7 for double pawn pushes
- 8		0  0  0  0  0  0  0  0
-7		1  1  1  1  1  1  1  1
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		0  0  0  0  0  0  0  0
-1		0  0  0  0  0  0  0  0
-
-		a  b  c  d  e  f  g  h
-		Board number: 65280
- */
-#define row7 65280
-
-
-/**
-8		1  1  1  1  1  1  1  1
-7		0  0  0  0  0  0  0  0
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		0  0  0  0  0  0  0  0
-1		0  0  0  0  0  0  0  0
-
-		a  b  c  d  e  f  g  h
-		Board number: 255
- */
-#define row8 255
-
-/**
-8		0  0  0  0  0  0  0  0
-7		0  0  0  0  0  0  0  0
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		0  0  0  0  0  0  0  0
-1		1  1  1  1  1  1  1  1
-
-		a  b  c  d  e  f  g  h
-		Board number: 18374686479671623680
- */
-#define row1 18374686479671623680
-
-/**
- * castling mask
-8		0  0  0  0  0  0  0  0
-7		0  0  0  0  0  0  0  0
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		0  0  0  0  0  0  0  0
-1		0  0  0  0  0  1  1  0
-
-		a  b  c  d  e  f  g  h
-		Board number: 6917529027641081856
- */
-#define castle_mask_wk 6917529027641081856
-
-/**
-8		0  0  0  0  0  1  1  0
-7		0  0  0  0  0  0  0  0
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		0  0  0  0  0  0  0  0
-1		0  0  0  0  0  0  0  0
-
-		a  b  c  d  e  f  g  h
-		Board number: 96
- */
-#define castle_mask_bk 96
-
-/**
-8               0  0  0  0  0  0  0  0
-7               0  0  0  0  0  0  0  0
-6               0  0  0  0  0  0  0  0
-5               0  0  0  0  0  0  0  0
-4               0  0  0  0  0  0  0  0
-3               0  0  0  0  0  0  0  0
-2               0  0  0  0  0  0  0  0
-1               0  0  1  1  0  0  0  0
-
-                a  b  c  d  e  f  g  h
-                Board number: 864691128455135232
- */
-#define castle_attack_mask_wq 864691128455135232
-/**
-8		0  0  0  0  0  0  0  0
-7		0  0  0  0  0  0  0  0
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		0  0  0  0  0  0  0  0
-1		0  1  1  1  0  0  0  0
-
-		a  b  c  d  e  f  g  h
-		Board number: 1008806316530991104
- */
-#define castle_piece_mask_wq 1008806316530991104
-
-/**
-8               0  0  1  1  0  0  0  0
-7               0  0  0  0  0  0  0  0
-6               0  0  0  0  0  0  0  0
-5               0  0  0  0  0  0  0  0
-4               0  0  0  0  0  0  0  0
-3               0  0  0  0  0  0  0  0
-2               0  0  0  0  0  0  0  0
-1               0  0  0  0  0  0  0  0
-
-                a  b  c  d  e  f  g  h
-                Board number: 12
- */
-#define castle_attack_mask_bq 12
-/**
-8		0  1  1  1  0  0  0  0
-7		0  0  0  0  0  0  0  0
-6		0  0  0  0  0  0  0  0
-5		0  0  0  0  0  0  0  0
-4		0  0  0  0  0  0  0  0
-3		0  0  0  0  0  0  0  0
-2		0  0  0  0  0  0  0  0
-1		0  0  0  0  0  0  0  0
-
-		a  b  c  d  e  f  g  h
-		Board number: 14
- */
-#define castle_piece_mask_bq 14
 enum {
     a8, b8, c8, d8, e8, f8, g8, h8,
     a7, b7, c7, d7, e7, f7, g7, h7,
@@ -340,27 +138,22 @@ enum {
     a1, b1, c1, d1, e1, f1, g1, h1, no_square
 };
 
-enum { black, white };
+enum { black, white, both };
 
-enum { rook, bishop, both };
 //Encode the pieces here as they would be output to the screen
 enum {P, N, B, R, Q, K, p, n, b, r, q, k};
 
-//Everything is public right now for testing purposes
-/**
- * Castling rights
- * bin      dec     meaning
- * 0001     1       white king can castle to king side
- * 0010     2       white king can castle to queen side
- * 0100     4       black king can castle to king side
- * 1000     8       black king can castle to queen side
- *
- *
- *
- */
+// set up so the opposite direction is at index 7-i
+enum {DE, DN, DNW, DNE, DSW, DSE, DS, DW};
+
+//    0001    0010,   0100,   1000
 enum {wk = 1, wq = 2, bk = 4, bq = 8};
 
 const char ascii_pieces[] = "PNBRQKpnbrqk";
+
+/*********************\
+       STRUCTS
+\*********************/
 
 typedef struct {
     int moves[256];
@@ -383,6 +176,7 @@ typedef struct {
     int flags;
     int score;
     int move;
+    int nodes;
 } t_entry;
 
 typedef struct {
@@ -407,6 +201,11 @@ typedef struct {
     U64 table[500];
     int count;
 } t_repitition;
+
+
+/*********************\
+    SKUNK CLASS
+\*********************/
 
 class Skunk {
 public:
@@ -585,14 +384,12 @@ public:
             0x8918844842082200ULL,
             0x4010011029020020ULL
     };
+
     // convert ASCII character pieces to encoded constants
 #ifndef _WIN32
     char *unicode_pieces[12] = { "♙", "♘", "♗", "♖", "♕", "♔","♟︎", "♞", "♝", "♜", "♛", "♚" };
 #endif
-//     int char_pieces[12] = {P, N, B, R, Q, K, p, n, b, r, q, k};
 
-        // must initialize these like char_pieces['P'] = Pw
-    int char_pieces[115];
 
     const int castling_rights[64] = {
             7, 15, 15, 15,  3, 15, 15, 11,
@@ -604,89 +401,6 @@ public:
             15, 15, 15, 15, 15, 15, 15, 15,
             13, 15, 15, 15, 12, 15, 15, 14
     };
-
-    // score tables for evaluating pieces
-    const int piece_scores[12] = {
-            100,
-            300,
-            350,
-            500,
-            1000,
-            10000,
-            -100,
-            -300,
-            -350,
-            -500,
-            -1000,
-            -10000
-    };
-
-    // pawn positional score
-    const int pawn_score[64] =
-            {
-                    90,  90,  90,  90,  90,  90,  90,  90,
-                    30,  30,  30,  40,  40,  30,  30,  30,
-                    20,  20,  20,  30,  30,  30,  20,  20,
-                    10,  10,  10,  20,  20,  10,  10,  10,
-                    5,   5,  10,  20,  20,   5,   5,   5,
-                    0,   0,   0,   5,   5,   0,   0,   0,
-                    0,   0,   0, -10, -10,   0,   0,   0,
-                    0,   0,   0,   0,   0,   0,   0,   0
-            };
-
-// knight positional score
-    const int knight_score[64] =
-            {
-                    -5,   0,   0,   0,   0,   0,   0,  -5,
-                    -5,   0,   0,  10,  10,   0,   0,  -5,
-                    -5,   5,  20,  20,  20,  20,   5,  -5,
-                    -5,  10,  20,  30,  30,  20,  10,  -5,
-                    -5,  10,  20,  30,  30,  20,  10,  -5,
-                    -5,   5,  20,  10,  10,  20,   5,  -5,
-                    -5,   0,   0,   0,   0,   0,   0,  -5,
-                    -5, -10,   0,   0,   0,   0, -10,  -5
-            };
-
-// bishop positional score
-    const int bishop_score[64] =
-            {
-                    0,   0,   0,   0,   0,   0,   0,   0,
-                    0,   0,   0,   0,   0,   0,   0,   0,
-                    0,   0,   0,  10,  10,   0,   0,   0,
-                    0,   0,  10,  20,  20,  10,   0,   0,
-                    0,   0,  10,  20,  20,  10,   0,   0,
-                    0,  10,   0,   0,   0,   0,  10,   0,
-                    0,  30,   0,   0,   0,   0,  30,   0,
-                    0,   0, -10,   0,   0, -10,   0,   0
-
-            };
-
-// rook positional score
-    const int rook_score[64] =
-            {
-                    50,  50,  50,  50,  50,  50,  50,  50,
-                    50,  50,  50,  50,  50,  50,  50,  50,
-                    0,   0,  10,  20,  20,  10,   0,   0,
-                    0,   0,  10,  20,  20,  10,   0,   0,
-                    0,   0,  10,  20,  20,  10,   0,   0,
-                    0,   0,  10,  20,  20,  10,   0,   0,
-                    0,   0,  10,  20,  20,  10,   0,   0,
-                    0,   0,   0,  20,  20,   0,   0,   0
-
-            };
-
-// king positional score
-    const int king_score[64] =
-            {
-                    0,   0,   0,   0,   0,   0,   0,   0,
-                    0,   0,   5,   5,   5,   5,   0,   0,
-                    0,   5,   5,  10,  10,   5,   5,   0,
-                    0,   5,  10,  20,  20,  10,   5,   0,
-                    0,   5,  10,  20,  20,  10,   5,   0,
-                    0,   0,   5,  10,  10,   5,   0,   0,
-                    0,   5,   5,  -5,  -5,   0,   5,   0,
-                    0,   0,   5,   0, -15,   0,  10,   0
-            };
 
 // mirror positional score tables for opposite side
     const int mirror_score[128] =
@@ -700,7 +414,6 @@ public:
                     a7, b7, c7, d7, e7, f7, g7, h7,
                     a8, b8, c8, d8, e8, f8, g8, h8
             };
-
 
     // MVV LVA [attacker][victim]
     int mvv_lva[12][12] = {
@@ -719,6 +432,7 @@ public:
             100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
     };
     unsigned int seed = 1804289383;
+    int char_pieces[115];
 
 
     Skunk();
@@ -741,7 +455,6 @@ public:
     U64 rays[64][64];
     int get_piece(int square);
     U64 get_attacks(int piece, int square, int side);
-    enum {DE, DN, DNW, DNE, DSW, DSE, DS, DW}; // set up so the opposite direction is 8-i
     int nearest_square[8][64]; // given a direction and a square, give me the furthest square in that direction
 
     // ZOBRISK HASHING
@@ -749,11 +462,11 @@ public:
     U64 enpassant_keys[64];
     U64 castle_keys[16];
     U64 side_key;
+    U64 zobrist = 0ULL;
 
     int piece_count[12];
-    // killer t_moves
     int killer_moves[2][MAX_PLY];
-    //history move source->destination (alternative could be piece->destination)
+    //history, side->source->destination (alternative could be piece->destination)
     int history_moves[2][64][64];
 
     t_entry *transposition_table = NULL; // tt table for negamax search
@@ -762,7 +475,6 @@ public:
     t_repitition repitition;
 
 
-    U64 zobrist = 0ULL;
     t_line previous_pv_line;
 
     inline int is_repitition();
@@ -781,37 +493,30 @@ public:
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
     inline void fill_occupancies();
     inline void generate_moves(t_moves &moves_list);
-    inline void generate_moves_old(t_moves &moves_list);
-    inline void print_difference(t_moves &a, t_moves &b);
     inline void print_move_detailed(int move);
     inline int make_move(int move, int move_flag);
-    void perft_test(int depth);
-    int evaluate();
-    int null_ok();
-    int search(int maxDepth);
-    int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
-    int quiesence(int alpha, int beta);
+    inline void perft_test(int depth);
+    inline int evaluate();
+    inline int null_ok();
+    inline int search(int maxDepth);
+    inline int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
+    inline int quiesence(int alpha, int beta);
 
-    int is_checkmate();
-    int is_check();
-    int coordinate_to_square(char *coordinate);
-    int score_move(int move);
-    void sort_moves(t_moves &moves_list);
-    unsigned int get_random_U32_number();
-    U64 get_random_U64_number();
-    U64 generate_zobrist();
-    void print_move(int move);
-    void init();
-    void test_moves_sort();
-    void print_moves(t_moves &moves_list);
-    int score_to_tt(int score, int ply);
-    int score_from_tt(int score, int ply);
-    void clear_transposition_tables();
-    void write_hash_entry(int score, int depth, int move, int flag);
+    inline int is_check();
+    inline int coordinate_to_square(char *coordinate);
+    inline int score_move(int move);
+    inline void sort_moves(t_moves &moves_list);
+    inline unsigned int get_random_U32_number();
+    inline U64 get_random_U64_number();
+    inline U64 generate_zobrist();
+    inline void print_move(int move);
+    inline void init();
+    inline void test_moves_sort();
+    inline void print_moves(t_moves &moves_list);
+    inline void clear_transposition_tables();
+    inline void write_hash_entry(int score, int depth, int move, int flag);
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
-
-    // evaluation commands
 
 
 
@@ -823,16 +528,17 @@ public:
     void parse_option(char *command);
     void parse_debug(char *command);
     void parse_perft(char *command);
-    char *fen_start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+    char *fen_start = (char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;
-    int search_type = SEARCH_DEPTH;
+    int search_type = SEARCH_MOVETIME;
     int wtime = 0;
     int btime = 0;
     int winc = 0;
     int binc = 0;
     int UCI_DefaultDepth = 7;
     int UCI_DebugMode = 0;
-    int UCI_DefaultDuration = 8000; // default time to search in milliseconds
+    int UCI_DefaultDuration = 4000; // default time to search in milliseconds
     int UCI_AnalyseMode = 1;
     int time_check_node_interval = 50000;
 
@@ -858,7 +564,7 @@ private:
     int full_moves = 0;
     int ply = 0;
     int nodes = 0;
-    int quiesence_moves = 0;
+    int q_nodes = 0;
     int cache_hit = 0;
     int cache_miss = 0;
 };

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <stdint.h>
+#include <vector>
 #include "board.h"
 
 using namespace std;
@@ -17,12 +18,21 @@ void parse_command(char * command, Skunk *skunk);
 t_commands split_command(char *command, char * seperator);
 
 
-
+void automate_tests();
 
 int main(int argc, char **argv) {
+//    automate_tests();
     uci_loop();
 //    Skunk *skunk = new Skunk();
-//    skunk->parse_fen("8/8/2pp4/KP4kr/5pP1/8/4P3/6R1 b - - 0 1");
+//    skunk->parse_fen("rn1qkbnr/ppp1pppp/8/3p4/3P4/8/PPb1PPPP/R1BQKBNR w KQkq - 0 1");
+//    printf("%d pawns\n", skunk->piece_count[]);
+//    int eval = skunk->evaluate();
+//    skunk->print_board();
+//    printf("Eval is %d\n", eval);
+//    t_moves moves_list;
+//    skunk->generate_moves(moves_list);
+//    skunk->sort_moves(moves_list);
+//    skunk->print_moves(moves_list);
 //    skunk->enpassant = g3;
 //    t_moves moves;
 //    skunk->generate_moves(moves);
@@ -38,6 +48,19 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+
+void automate_tests() {
+    std::vector<char *> tests;
+    tests.push_back((char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    Skunk *skunk = new Skunk();
+
+    for (int test=0; test<tests.size(); test++) {
+        // this will test the fen position for x couple of seconds
+        skunk->parse_fen(tests.at(test));
+        skunk->parse_go((char *)"go movetime 1000");
+    }
+}
 
 
 void uci_loop() {
