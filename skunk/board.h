@@ -125,6 +125,8 @@ U64 zobrist_copy = zobrist; \
      ENUMERATIONS
 \*********************/
 
+enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
+
 enum {all_moves, only_captures};
 
 enum {
@@ -137,6 +139,8 @@ enum {
     a2, b2, c2, d2, e2, f2, g2, h2,
     a1, b1, c1, d1, e1, f1, g1, h1, no_square
 };
+
+enum {LEFT=0, MIDDLE=1, RIGHT=2};
 
 enum { black, white, both };
 
@@ -158,6 +162,7 @@ const char ascii_pieces[] = "PNBRQKpnbrqk";
 typedef struct {
     int moves[256];
     int count;
+    int contains_castle = 0;
 } t_moves;
 
 typedef struct {
@@ -453,9 +458,16 @@ public:
     U64 occupancies[3];
     U64 bitboards[12];
     U64 rays[64][64];
+    U64 file_masks[3][64];
     int get_piece(int square);
     U64 get_attacks(int piece, int square, int side);
     int nearest_square[8][64]; // given a direction and a square, give me the furthest square in that direction
+
+    // EVALUATION
+//enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
+    int evaluation_weights[7] = {1000, 5, 50, 25, 0, 0, 0};
+    int castled = 0;
+    int moves = 0;
 
     // ZOBRISK HASHING
     U64 piece_keys[12][64];
@@ -479,6 +491,7 @@ public:
 
     inline int is_repetition();
     inline void construct_rays();
+    inline void construct_file_masks();
     inline void construct_direction_rays();
     inline U64 construct_bishop_attacks(int square, U64 blockers);
     inline U64 construct_rook_attacks(int square, U64 blockers);
@@ -514,7 +527,7 @@ public:
     inline void test_moves_sort();
     inline void print_moves(t_moves &moves_list);
     inline void clear_transposition_tables();
-    inline void write_hash_entry(int score, int depth, int move, int flag);
+    inline void write_hash_entry(int score, int depth, int move, int flag) const;
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
 
@@ -541,9 +554,10 @@ public:
     int UCI_DefaultDuration = 4000; // default time to search in milliseconds
     int UCI_AnalyseMode = 1;
     int time_check_node_interval = 50000;
-
-
     int enpassant = no_square;
+
+//    int weights[10] = {};
+
 
 private:
     void perft_test_helper(int depth);

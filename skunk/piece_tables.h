@@ -8,18 +8,18 @@
 
 // score tables for evaluating pieces
 const int piece_scores[12] = {
+        1,
+        3,
+        3,
+        5,
+        10,
         100,
-        300,
-        350,
-        500,
-        1000,
-        10000,
-        -100,
-        -300,
-        -350,
-        -500,
-        -1000,
-        -10000
+        -1,
+        -3,
+        -3,
+        -5,
+        -10,
+        -100
 };
 
 // pawn positional score

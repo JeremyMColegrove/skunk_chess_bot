@@ -183,7 +183,7 @@ Skunk::Skunk() {
     construct_slider_attacks();
     construct_rays();
     construct_direction_rays();
-
+    construct_file_masks();
 
     //reset our turn
     side = white;
@@ -317,6 +317,45 @@ Skunk::~Skunk() {
         delete[] transposition_table;
     }
 }
+
+void Skunk::construct_file_masks() {
+
+    memset(file_masks, 0ULL, sizeof(file_masks));
+
+    U64 mask;
+
+    // middle
+    for (int square = 0; square < 64; square++) {
+        mask = 0ULL;
+        for (int row = 0; row < 8; row++) {
+            set_bit(mask, row * 8 + (square % 8));
+        }
+        file_masks[MIDDLE][square] = mask;
+    }
+
+    // left
+    for (int square = 0; square < 64; square++) {
+        mask = 0ULL;
+        if (square % 8 == 0) continue;
+        for (int row = 0; row < 8; row++) {
+            set_bit(mask, row * 8 + ((square-1) % 8));
+        }
+        file_masks[LEFT][square] = mask;
+    }
+
+    // right
+    for (int square = 0; square < 64; square++) {
+        mask = 0ULL;
+        if (square % 8 == 7) continue;
+        for (int row = 0; row < 8; row++) {
+            set_bit(mask, row * 8 + ((square+1) % 8));
+        }
+        file_masks[RIGHT][square] = mask;
+    }
+}
+
+
+
 void Skunk::construct_direction_rays() {
 
     for (int i=0; i<64; i++) {
@@ -1123,18 +1162,22 @@ void Skunk::generate_moves(t_moves &moves_list)
         // if castling is available and king is not in check
         if (castle & wk && ((attacked_squares | occupancies[both]) & castle_mask_wk) == 0) {
             moves_list.moves[moves_list.count++] = encode_move(e1, g1, K, 0, 0, 1);
+            moves_list.contains_castle = 1;
         }
 
         if (castle & wq && (attacked_squares & castle_attack_mask_wq) ==0 && (occupancies[both] & castle_piece_mask_wq) == 0 ) {
             moves_list.moves[moves_list.count++] = encode_move(e1, c1, K, 0, 0, 1);
+            moves_list.contains_castle = 1;
         }
     } else if (side == black && (attacked_squares & bitboards[k]) == 0) {
         if (castle & bk && ((attacked_squares | occupancies[both]) & castle_mask_bk) == 0) {
             moves_list.moves[moves_list.count++] = encode_move(e8, g8, k, 0, 0, 1);
+            moves_list.contains_castle = 1;
         }
 
         if (castle & bq && (attacked_squares & castle_attack_mask_bq) ==0 && (occupancies[both] & castle_piece_mask_bq) == 0 ) {
             moves_list.moves[moves_list.count++] = encode_move(e8, c8, k, 0, 0, 1);
+            moves_list.contains_castle = 1;
         }
     }
 
@@ -1315,32 +1358,9 @@ int Skunk::is_check() {
     return is_square_attacked(get_ls1b_index(bitboards[side==white?K:k]), side^1);
 }
 
-void Skunk::write_hash_entry(int score, int depth, int move, int flag) {
+void Skunk::write_hash_entry(int score, int depth, int move, int flag) const {
 #ifdef TRANSPOSITION_TABLE
     t_entry  *entry = &transposition_table[zobrist % HASH_SIZE];
-
-    // adjust mating scores ? not needed...actaully ends up not able to find mate for some reason
-//    if (score < -CHECKMATE + 1000) score += ply;
-//    if (score > CHECKMATE - 1000) score -= ply;
-
-
-// TESTS DONE AT SIZE hash_size 399990
-// ALWAYS REPLACE
-// info transpositions 2131 ttp: 0.0034 score cp 20 depth 7 nodes 618580 q_nodes 671624 time 522 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
-
-// PRIORITIZE MORE NODES
-// info transpositions 2131 ttp: 0.0034 score cp 20 depth 7 nodes 618580 q_nodes 671624 time 533 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
-
-// PRIORITIZE LESS NODES (closer to root)
-// info transpositions 5260 ttp: 0.0085 score cp 20 depth 7 nodes 622165 q_nodes 672264 time 501 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
-
-// DEPTH PREFERRED (choose larger depth)
-// info transpositions 1977 ttp: 0.0032 score cp 20 depth 7 nodes 618463 q_nodes 671599 time 494 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
-
-// DEPTH NOT PREFERRED (choose lower depth)
-// info transpositions 5263 ttp: 0.0085 score cp 20 depth 7 nodes 622161 q_nodes 672248 time 474 pv d2d4 d7d5 b1c3 b8c6 g1f3 g8f6 c1f4
-
-
 
     // if there is a clash, choose the TT with the higher nodes searched
     entry->score = score;
@@ -1362,7 +1382,13 @@ int Skunk::quiesence(int alpha, int beta) {
         communicate();
     }
 
-    int evaluation = evaluate();
+    t_moves moves_list;
+
+    generate_moves(moves_list);
+
+    int check = is_check();
+
+    int evaluation = evaluate() + ((int)log(moves_list.count + 1) * 0.5 * evaluation_weights[MOBILITY_WEIGHT]) - (check?evaluation_weights[KING_SAFETY_WEIGHT]:0);
 
 #ifdef ALPHA_BETA
     if (evaluation >= beta) {
@@ -1374,10 +1400,6 @@ int Skunk::quiesence(int alpha, int beta) {
     if (evaluation > alpha) {
         alpha = evaluation;
     }
-
-    t_moves moves_list;
-
-    generate_moves(moves_list);
 
     sort_moves(moves_list);
 
@@ -1410,6 +1432,7 @@ int Skunk::quiesence(int alpha, int beta) {
         assert(zobrist == generate_zobrist());
 #endif
         restore_board();
+        moves --;
 
 #ifdef ALPHA_BETA
         if (score >= beta) {
@@ -1444,15 +1467,15 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     sort_moves(moves_list);
 
+    int check = is_check();
+
     // base case
     if (depth < 1) {
         if (pline != NULL) pline->cmove = 0;
         return quiesence(alpha, beta);
     }
 
-
     // checkmate / stalemate
-    int check = is_check();
     if (moves_list.count == 0) {
         if (check) {
             return (-CHECKMATE) + ply;
@@ -1628,6 +1651,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         restore_board();
         ply --;
         repitition.count--;
+        moves --;
 
         if (best_score > alpha) {
             alpha = best_score;
@@ -1692,13 +1716,14 @@ int Skunk::search(int maxDepth) {
     q_nodes = 0;
     nodes = 0;
 
+    int alpha = INT_MIN + 1, beta = INT_MAX, test;
+
     for (int depth = 1; depth <= maxDepth; depth++) {
 
         ply = 0;
         pline.cmove = 0;
 
-
-        int test = negamax(INT_MIN + 1, INT_MAX, depth, 1, DO_NULL, &pline);
+        test = negamax(alpha, beta, depth, 1, DO_NULL, &pline);
 
         // only use odd depths, for some reason even depths are slightly weaker
         if (force_stop) break;
@@ -1706,8 +1731,6 @@ int Skunk::search(int maxDepth) {
         previous_pv_line = pline;
         score = test;
         useable_depth = depth;
-
-
     }
 
     if (UCI_AnalyseMode)
@@ -1722,7 +1745,6 @@ int Skunk::search(int maxDepth) {
         } else {
             printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, useable_depth, nodes, q_nodes, elapsed);
         }
-
 
         for (int i=0; i<previous_pv_line.cmove; i++) {
             // loop over the moves within a PV line
@@ -1746,7 +1768,7 @@ int Skunk::evaluate() {
 
     // simply evaluates the piece scores
     U64 bitboard;
-    int score = 0;
+    int score = 0, empty_files = 0, isolated_pawns = 0;
     for (int piece = P; piece <= k; piece++) {
         bitboard = bitboards[piece];
         while (bitboard) {
@@ -1767,14 +1789,58 @@ int Skunk::evaluate() {
                 case r: score -= rook_score[mirror_score[square]]; break;
                 case k: score -= king_score[mirror_score[square]]; break;
             }
+            score += evaluation_weights[SQUARE_SCORE_WEIGHT];
 
-            score += piece_scores[piece] * 10;
+            score += piece_scores[piece] * evaluation_weights[PIECE_SCORE_WEIGHT];
 
             pop_lsb(bitboard);
         }
     }
 
-    score /= 10;
+    // check for doubled pawns for white
+    U64 left, middle, right;
+    for (int file = 0; file<8; file++) {
+        middle = file_masks[MIDDLE][file] & bitboards[P];
+        left = file_masks[LEFT][file] & bitboards[P];
+        right = file_masks[RIGHT][file] & bitboards[P];
+
+        //isolated pawns
+        if (middle && !left && !right)
+        {
+            score -= evaluation_weights[ISOLATED_PAWNS_WEIGHT]; // the pawn may as well be half gone
+        }
+
+        if (!middle)
+            empty_files++;
+    }
+
+    // check doubled pawns
+    if (empty_files + piece_count[P] > 8) {
+        score -=  ((empty_files + piece_count[P]) - 8) * evaluation_weights[DOUBLED_PAWNS_WEIGHT];
+    }
+
+    empty_files = 0;
+
+    // check for doubled pawns for black
+    for (int file = 0; file<8; file++) {
+        middle = (file_masks[MIDDLE][file] & bitboards[p]);
+        left = (file_masks[LEFT][file] & bitboards[p]);
+        right = (file_masks[RIGHT][file] & bitboards[p]);
+
+        if (middle && !left && !right) {
+            // isolated pawn
+            score += evaluation_weights[ISOLATED_PAWNS_WEIGHT]; // the pawn may as well be half gone
+        }
+
+        if (!middle) {
+            empty_files++;
+        }
+    }
+
+    // check doubled pawns
+    if (empty_files + piece_count[p] > 8) {
+        score += ((empty_files + piece_count[p]) - 8) * evaluation_weights[DOUBLED_PAWNS_WEIGHT];
+    }
 
     return (side==white?score:-score);
 }
@@ -1921,7 +1987,6 @@ void Skunk::parse_position(char *command) {
         }
     }
 }
-
 
 void Skunk::parse_perft(char *command) {
     int depth = 5;
@@ -2123,6 +2188,7 @@ int Skunk::is_repetition() {
         }
 
         if (castling) {
+            castled = 1;
             switch (target) {
                 case g1:
                     pop_bit(bitboards[R], h1);
@@ -2175,6 +2241,8 @@ int Skunk::is_repetition() {
         occupancies[both] |= occupancies[black];
 
         side ^= 1;
+
+        moves ++;
 
         zobrist ^= side_key;
 
