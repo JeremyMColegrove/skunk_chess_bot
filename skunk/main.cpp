@@ -14,16 +14,18 @@ typedef struct {
 } t_commands;
 
 void uci_loop();
+
 void parse_command(char * command, Skunk *skunk);
+
 t_commands split_command(char *command, char * seperator);
-
-
 
 int main(int argc, char **argv) {
 //    automate_tests();
-    uci_loop();
-//    Skunk *skunk = new Skunk();
-//    skunk->parse_fen("r1b1k1nr/ppp1p1bp/2nq1pp1/1B1p4/3P4/2N1PN2/PPP2PPP/R1BQK2R w KQkq - 2 7");
+//    uci_loop();
+    Skunk *skunk = new Skunk();
+    skunk->parse_fen("2kr1b1r/ppp2ppp/4p3/8/1n6/2Q2P2/qR2BPPP/2B2RK1 b - - 1 14");
+    skunk->search(8);
+//    skunk->print_board();
 //    printf("%d\n", skunk->evaluate());
 //    int eval = skunk->evaluate();
 //    skunk->print_board();
@@ -115,7 +117,7 @@ void parse_command(char *input, Skunk *skunk) {
     } else if (strncmp(input, "go", 2)==0) {
         skunk->parse_go(input);
     } else if (strncmp(input, "uci", 3)==0) {
-        printf("id name MoreComplex\n"
+        printf("id name Complex3\n"
                "id author Jeremy Colegrove\n"
                "option name UCI_AnalyseMode type spin default true\n"
                "option name UCI_DefaultDepth type spin default 7\n"

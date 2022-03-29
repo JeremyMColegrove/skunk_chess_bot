@@ -1771,31 +1771,36 @@ int Skunk::evaluate() {
     int score = 0, empty_files = 0, isolated_pawns = 0;
     for (int piece = P; piece <= k; piece++) {
         bitboard = bitboards[piece];
+
         while (bitboard) {
             int square = get_ls1b_index(bitboard);
-            switch (piece)
-            {
-                // evaluate white pieces
-                case P: score += pawn_score[square]; break;
-                case N: score += knight_score[square]; break;
-                case B: score += bishop_score[square]; break;
-                case R: score += rook_score[square]; break;
-                case K: score += king_score[square]; break;
 
-                // evaluate black pieces
-                case p: score -= pawn_score[mirror_score[square]]; break;
-                case n: score -= knight_score[mirror_score[square]]; break;
-                case b: score -= bishop_score[mirror_score[square]]; break;
-                case r: score -= rook_score[mirror_score[square]]; break;
-                case k: score -= king_score[mirror_score[square]]; break;
+            /*********************\
+                  SQUARE TABLE
+            \*********************/
+
+            if (piece >= p)
+            {
+                score -= square_scores[piece % 6][mirror_score[square]] * evaluation_weights[SQUARE_SCORE_WEIGHT];
             }
-            score += evaluation_weights[SQUARE_SCORE_WEIGHT];
+            else
+            {
+                score += square_scores[piece % 6][square] * evaluation_weights[SQUARE_SCORE_WEIGHT];
+            }
+
+            /*********************\
+                  PIECE SCORE
+            \*********************/
 
             score += piece_scores[piece] * evaluation_weights[PIECE_SCORE_WEIGHT];
 
             pop_lsb(bitboard);
         }
     }
+
+    /**************************************\
+         DOUBLED PAWNS & ISOLATED PAWNS
+    \**************************************/
 
     // check for doubled pawns for white
     U64 left, middle, right;
@@ -1814,7 +1819,7 @@ int Skunk::evaluate() {
             empty_files++;
     }
 
-    // check doubled pawns
+    // check white doubled pawns penalty
     if (empty_files + piece_count[P] > 8) {
         score -=  ((empty_files + piece_count[P]) - 8) * evaluation_weights[DOUBLED_PAWNS_WEIGHT];
     }
@@ -1837,10 +1842,40 @@ int Skunk::evaluate() {
         }
     }
 
-    // check doubled pawns
+    // check black doubled pawns penalty
     if (empty_files + piece_count[p] > 8) {
         score += ((empty_files + piece_count[p]) - 8) * evaluation_weights[DOUBLED_PAWNS_WEIGHT];
     }
+
+    /*********************\
+        PASSED PAWNS
+    \*********************/
+
+    int square;
+    U64 mask;
+
+    // white passed pawns
+    bitboard = bitboards[P];
+    while (bitboard) {
+        square = get_ls1b_index(bitboard);
+        mask = (rays[square-1][nearest_square[DN][square-1]] & not_h_file) | rays[square][nearest_square[DN][square]] | (rays[square+1][nearest_square[DN][square+1]] & not_a_file) ;
+        if (!(mask & bitboards[p])) {
+            score += evaluation_weights[PASSED_PAWN];
+        }
+        pop_lsb(bitboard);
+    }
+
+    // black passed pawns
+    bitboard = bitboards[p];
+    while (bitboard) {
+        square = get_ls1b_index(bitboard);
+        mask = (rays[square-1][nearest_square[DS][square-1]] & not_h_file) | rays[square][nearest_square[DS][square]] | (rays[square+1][nearest_square[DS][square+1]] & not_a_file) ;
+        if (!(mask & bitboards[P])) {
+            score -= evaluation_weights[PASSED_PAWN];
+        }
+        pop_lsb(bitboard);
+    }
+
 
     return (side==white?score:-score);
 }

@@ -4,6 +4,7 @@
 
 #ifndef BITBOT_BOARD_H
 #define BITBOT_BOARD_H
+
 #include <stdint.h>
 #include <string.h>
 #include <climits>
@@ -125,7 +126,7 @@ U64 zobrist_copy = zobrist; \
      ENUMERATIONS
 \*********************/
 
-enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
+enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, PASSED_PAWN, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
 
 enum {all_moves, only_captures};
 
@@ -162,7 +163,7 @@ const char ascii_pieces[] = "PNBRQKpnbrqk";
 typedef struct {
     int moves[256];
     int count;
-    int contains_castle = 0;
+    int contains_castle;
 } t_moves;
 
 typedef struct {
@@ -464,8 +465,8 @@ public:
     int nearest_square[8][64]; // given a direction and a square, give me the furthest square in that direction
 
     // EVALUATION
-//enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
-    int evaluation_weights[7] = {1000, 5, 50, 25, 0, 0, 0};
+//enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, PASSED_PAWN, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
+    int evaluation_weights[8] = {200, 5, 50, 25, 50, 0, 0, 0};
     int castled = 0;
     int moves = 0;
 
@@ -509,7 +510,7 @@ public:
     inline void print_move_detailed(int move);
     inline int make_move(int move, int move_flag);
     inline void perft_test(int depth);
-    inline int evaluate();
+    int evaluate();
     inline int null_ok();
     inline int search(int maxDepth);
     inline int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
@@ -530,6 +531,8 @@ public:
     inline void write_hash_entry(int score, int depth, int move, int flag) const;
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
+
+    const int *square_scores[6] = {pawn_score, knight_score, bishop_score, rook_score, king_score, queen_score};
 
 
 
