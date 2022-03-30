@@ -1765,6 +1765,16 @@ int Skunk::search(int maxDepth) {
 
 int Skunk::evaluate() {
 
+    // count the number of major pieces
+    int num_majors = 0;
+    for (int piece = P; piece<=k; piece++) {
+        if (piece == P || piece == p) continue;
+        num_majors += piece_count[piece];
+    }
+
+    if (num_majors < 8) {
+
+    }
 
     // simply evaluates the piece scores
     U64 bitboard;

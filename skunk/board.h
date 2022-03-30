@@ -533,7 +533,23 @@ public:
     std::chrono::steady_clock::time_point start_time;
 
     const int *square_scores[6] = {pawn_score, knight_score, bishop_score, rook_score, king_score, queen_score};
+    int *mg_tables[6] = {
+            mg_pawn_table,
+            mg_knight_table,
+            mg_bishop_table,
+            mg_rook_table,
+            mg_queen_table,
+            mg_king_table,
+    };
 
+    int *eg_tables[6] = {
+            eg_pawn_table,
+            eg_knight_table,
+            eg_bishop_table,
+            eg_rook_table,
+            eg_queen_table,
+            eg_king_table,
+    };
 
 
     // UCI commands/helper functions
