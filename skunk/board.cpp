@@ -1766,19 +1766,22 @@ int Skunk::search(int maxDepth) {
 int Skunk::evaluate() {
 
     // count the number of major pieces
+    is_endgame = 0;
     int num_majors = 0;
     for (int piece = P; piece<=k; piece++) {
         if (piece == P || piece == p) continue;
         num_majors += piece_count[piece];
     }
 
+    // idk about this lower bound...
     if (num_majors < 8) {
-
+        is_endgame = 1;
     }
 
     // simply evaluates the piece scores
     U64 bitboard;
-    int score = 0, empty_files = 0, isolated_pawns = 0;
+    float score = 0;
+    int empty_files = 0, isolated_pawns = 0, square_score;
     for (int piece = P; piece <= k; piece++) {
         bitboard = bitboards[piece];
 
@@ -1789,13 +1792,14 @@ int Skunk::evaluate() {
                   SQUARE TABLE
             \*********************/
 
+
             if (piece >= p)
             {
-                score -= square_scores[piece % 6][mirror_score[square]] * evaluation_weights[SQUARE_SCORE_WEIGHT];
+                score -= (1 - is_endgame)*square_scores[piece % 6][mirror_score[square]] + is_endgame*eg_tables[piece % 6][square] ;
             }
             else
             {
-                score += square_scores[piece % 6][square] * evaluation_weights[SQUARE_SCORE_WEIGHT];
+                score += (1 - is_endgame)*square_scores[piece % 6][mirror_score[square]] + is_endgame*eg_tables[piece % 6][square] ;
             }
 
             /*********************\
@@ -1831,7 +1835,7 @@ int Skunk::evaluate() {
 
     // check white doubled pawns penalty
     if (empty_files + piece_count[P] > 8) {
-        score -=  ((empty_files + piece_count[P]) - 8) * evaluation_weights[DOUBLED_PAWNS_WEIGHT];
+        score -=  evaluation_weights[DOUBLED_PAWNS_WEIGHT] * ((empty_files + piece_count[P]) - 8);
     }
 
     empty_files = 0;
@@ -1854,7 +1858,7 @@ int Skunk::evaluate() {
 
     // check black doubled pawns penalty
     if (empty_files + piece_count[p] > 8) {
-        score += ((empty_files + piece_count[p]) - 8) * evaluation_weights[DOUBLED_PAWNS_WEIGHT];
+        score += evaluation_weights[DOUBLED_PAWNS_WEIGHT] * ((empty_files + piece_count[p]) - 8);
     }
 
     /*********************\
@@ -1884,6 +1888,58 @@ int Skunk::evaluate() {
             score -= evaluation_weights[PASSED_PAWN];
         }
         pop_lsb(bitboard);
+    }
+
+    /*********************\
+            MOBILITY
+    \*********************/
+
+    // piece white mobility (knights, rooks, bishops)
+    int pieces[] = {N, R, B, n, r, b};
+    for (int i = 0; i<6; i++) {
+        int piece = pieces[piece];
+        bitboard = bitboards[pieces[piece]];
+        while (bitboard) {
+            square = get_ls1b_index(bitboard);
+
+            // get this pieces moves
+            if (piece >= n) {
+
+                score -= log(bit_count(get_attacks(piece, square, black) + 1)) * evaluation_weights[MOBILITY_WEIGHT];
+            } else {
+                score += log(bit_count(get_attacks(piece, square, white) + 1)) * evaluation_weights[MOBILITY_WEIGHT];
+            }
+            pop_lsb(bitboard);
+        }
+    }
+
+    /*********************\
+         KING SAFETY
+    \*********************/
+
+    // get the distance to all of the other pieces
+    //white
+    // this should only count towards the beginning of the game
+    int king_square = get_ls1b_index(bitboards[K]), distance, total, row_attacker, column_attacker, row_king = king_square/8, column_king=king_square%8;
+    if (!is_endgame) {
+        for (int piece = p; piece < k; piece++) {
+            bitboard = bitboards[piece];
+            total = 0;
+            while (bitboard) {
+                square = get_ls1b_index(bitboard);
+                // get distance to the piece
+                // get row and column
+                row_attacker = square / 8;
+                column_attacker = square % 8;
+
+                distance = 16 - (abs(row_king - row_attacker) + abs(column_king - column_attacker));
+
+                total -= distance * king_distance_heuristic[piece % 6];
+
+                pop_lsb(bitboard);
+            }
+            score += (total/10);
+        }
     }
 
 

@@ -466,9 +466,11 @@ public:
 
     // EVALUATION
 //enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, PASSED_PAWN, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
-    int evaluation_weights[8] = {200, 5, 50, 25, 50, 0, 0, 0};
+    float evaluation_weights[8] = {600, 20, 50, 25, 50, 2, 50, 1};
+    int king_distance_heuristic[5] = {10, 20, 25, 30, 40};
     int castled = 0;
     int moves = 0;
+    int is_endgame = 0;
 
     // ZOBRISK HASHING
     U64 piece_keys[12][64];
@@ -533,7 +535,8 @@ public:
     std::chrono::steady_clock::time_point start_time;
 
     const int *square_scores[6] = {pawn_score, knight_score, bishop_score, rook_score, king_score, queen_score};
-    int *mg_tables[6] = {
+
+    const int *mg_tables[6] = {
             mg_pawn_table,
             mg_knight_table,
             mg_bishop_table,
@@ -542,7 +545,7 @@ public:
             mg_king_table,
     };
 
-    int *eg_tables[6] = {
+    const int *eg_tables[6] = {
             eg_pawn_table,
             eg_knight_table,
             eg_bishop_table,

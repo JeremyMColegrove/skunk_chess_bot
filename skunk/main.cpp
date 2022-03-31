@@ -21,10 +21,10 @@ t_commands split_command(char *command, char * seperator);
 
 int main(int argc, char **argv) {
 //    automate_tests();
-//    uci_loop();
-    Skunk *skunk = new Skunk();
-    skunk->parse_fen("2kr1b1r/ppp2ppp/4p3/8/1n6/2Q2P2/qR2BPPP/2B2RK1 b - - 1 14");
-    skunk->search(8);
+    uci_loop();
+//    Skunk *skunk = new Skunk();
+//    skunk->parse_fen("r1bqkb1r/ppp2ppp/4pn2/3n3Q/3P4/2PB4/PP3PPP/RNB1K1NR w KQkq - 3 7");
+//    skunk->search(8);
 //    skunk->print_board();
 //    printf("%d\n", skunk->evaluate());
 //    int eval = skunk->evaluate();
