@@ -1,5 +1,6 @@
 #include <iostream>
 #include <stdint.h>
+#include <vector>
 #include "board.h"
 
 using namespace std;
@@ -13,15 +14,55 @@ typedef struct {
 } t_commands;
 
 void uci_loop();
+
 void parse_command(char * command, Skunk *skunk);
+
 t_commands split_command(char *command, char * seperator);
 
-
-
 int main(int argc, char **argv) {
+//    automate_tests();
     uci_loop();
+//    Skunk *skunk = new Skunk();
+//    skunk->parse_fen("r1bqkb1r/ppp2ppp/4pn2/3n3Q/3P4/2PB4/PP3PPP/RNB1K1NR w KQkq - 3 7");
+//    skunk->search(8);
+//    skunk->print_board();
+//    printf("%d\n", skunk->evaluate());
+//    int eval = skunk->evaluate();
+//    skunk->print_board();
+//    printf("Eval is %d\n", eval);
+//    t_moves moves_list;
+//    skunk->generate_moves(moves_list);
+//    skunk->sort_moves(moves_list);
+//    skunk->print_moves(moves_list);
+//    skunk->enpassant = g3;
+//    t_moves moves;
+//    skunk->generate_moves(moves);
+//    skunk->print_moves(moves);
+
+
+//    U64 board = 0ULL;
+//    Skunk *skunk = new Skunk();
+//    for (int i=0; i<64; i++) {
+//        set_bit(board, i);
+//    }
+//    skunk->print_bitboard(board);
     return 0;
 }
+
+
+void automate_tests() {
+    std::vector<char *> tests;
+    tests.push_back((char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+
+    Skunk *skunk = new Skunk();
+
+    for (int test=0; test<tests.size(); test++) {
+        // this will test the fen position for x couple of seconds
+        skunk->parse_fen(tests.at(test));
+        skunk->parse_go((char *)"go movetime 1000");
+    }
+}
+
 
 void uci_loop() {
     setbuf(stdin, NULL);
@@ -76,7 +117,7 @@ void parse_command(char *input, Skunk *skunk) {
     } else if (strncmp(input, "go", 2)==0) {
         skunk->parse_go(input);
     } else if (strncmp(input, "uci", 3)==0) {
-        printf("id name Skunk\n"
+        printf("id name Complex3\n"
                "id author Jeremy Colegrove\n"
                "option name UCI_AnalyseMode type spin default true\n"
                "option name UCI_DefaultDepth type spin default 7\n"
