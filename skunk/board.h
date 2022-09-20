@@ -34,7 +34,7 @@
 #define HASH_SIZE 399990
 
 // flag for enabling futility pruning in quiescence search
-#define FUTILITY_PRUNE
+//#define FUTILITY_PRUNE
 
 // flag for enabling NULL MOVE in negamax (DEPRECATED. USE VERIFIED NULL MOVE INSTEAD)
 //#define NULL_MOVE
