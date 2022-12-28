@@ -106,28 +106,60 @@ t_commands split_command(char *command, char *seperator) {
     return result;
 }
 
-void parse_command(char *input, Skunk *skunk) {
-
-    if (strncmp(input, "isready", 7)==0) {
+void parse_command(char *cmd, Skunk *skunk) {
+    if (strcmp(cmd, "uci") == 0) {
+        // Respond to the "uci" command by printing the engine name and options
+        printf("id name Complex3\n");
+        printf("id author Jeremy Colegrove\n");
+        printf("uciok\n");
+    } else if (strcmp(cmd, "isready") == 0) {
+        // Respond to the "isready" command by indicating that the engine is ready
         printf("readyok\n");
-    } else if (strncmp(input, "position", 8)==0) {
-        skunk->parse_position(input);
-    } else if (strncmp(input, "ucinewgame", 10)==0) {
+    } else if (strncmp(cmd, "setoption", 9) == 0) {
+        // Parse and process any options sent with the "setoption" command
+        // ...
+    } else if (strncmp(cmd, "position", 8) == 0) {
+        // Parse and set the position on the board sent with the "position" command
+        skunk->parse_position(cmd);
+    } else if (strncmp(cmd, "go", 2) == 0) {
+        // Parse and set the search parameters sent with the "go" command
+        // ...
+
+        // Start the search and print the best move when it is finished
+        skunk->parse_go(cmd);
+    } else if (strncmp(cmd, "ucinewgame", 10)==0) {
         skunk->parse_position("position startpos");
-    } else if (strncmp(input, "go", 2)==0) {
-        skunk->parse_go(input);
-    } else if (strncmp(input, "uci", 3)==0) {
-        printf("id name Complex3\n"
-               "id author Jeremy Colegrove\n"
-               "option name UCI_AnalyseMode type spin default true\n"
-               "option name UCI_DefaultDepth type spin default 7\n"
-               "option name UCI_DefaultDuration type spin default 2000\n"
-               "uciok\n");
-    } else if (strncmp(input, "setoption", 9)==0) {
-        skunk->parse_option(input);
-    } else if (strncmp(input, "debug", 5)==0) {
-        skunk->parse_debug(input);
-    } else if (strncmp(input, "perft", 5)==0) {
-        skunk->parse_perft(input);
+    }else if (strcmp(cmd, "stop") == 0) {
+        // Stop the search in response to the "stop" command
+        // ...
+    } else if (strcmp(cmd, "quit") == 0) {
+        // Exit the program in response to the "quit" command
+        exit(0);
+    } else if (strncmp(cmd, "perft", 5)==0) {
+        skunk->parse_perft(cmd);
+    } else {
+
     }
+//    if (strncmp(input, "isready", 7)==0) {
+//        printf("readyok\n");
+//    } else if (strncmp(input, "position", 8)==0) {
+//        skunk->parse_position(input);
+//    } else if (strncmp(input, "ucinewgame", 10)==0) {
+//        skunk->parse_position("position startpos");
+//    } else if (strncmp(input, "go", 2)==0) {
+//        skunk->parse_go(input);
+//    } else if (strncmp(input, "uci", 3)==0) {
+//        printf("id name Complex3\n"
+//               "id author Jeremy Colegrove\n"
+//               "option name UCI_AnalyseMode type spin default true\n"
+//               "option name UCI_DefaultDepth type spin default 7\n"
+//               "option name UCI_DefaultDuration type spin default 2000\n"
+//               "uciok\n");
+//    } else if (strncmp(input, "setoption", 9)==0) {
+//        skunk->parse_option(input);
+//    } else if (strncmp(input, "debug", 5)==0) {
+//        skunk->parse_debug(input);
+//    } else if (strncmp(input, "perft", 5)==0) {
+//        skunk->parse_perft(input);
+//    }
 }

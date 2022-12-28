@@ -4,7 +4,7 @@
 
 #include "board.h"
 #include <iostream>
-
+#include <sstream>
 #include <cmath>
 
 
@@ -1378,7 +1378,7 @@ int Skunk::quiesence(int alpha, int beta) {
     if (force_stop) return 0;
 
     // check if we should return or not
-    if (nodes % time_check_node_interval == 0) {
+    if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
 
@@ -1454,7 +1454,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     nodes ++ ;
 
-    // check if we should return or not
+    // check if we should quit or not
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
@@ -1961,13 +1961,13 @@ int Skunk::coordinate_to_square(char *coordinate) {
 void Skunk::communicate() {
 
     /*
-     * If the search is move_time, check if
+     * If the search is move_time, check if time elapsed has passed
      */
-    if (search_type == SEARCH_MOVETIME) {
+    if (move_time > 0) {
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
 
-        if (elapsed > UCI_DefaultDuration) {
+        if (elapsed > move_time) {
             force_stop = 1;
             return ;
         }
@@ -1976,81 +1976,87 @@ void Skunk::communicate() {
     /*
      * Polls stdin to see if there is any data to read
      */
-
-#ifdef _WIN32
-    struct timeval timeout;
-    timeout.tv_usec = 1;
-    timeout.tv_sec = 0;
-    fd_set fds;
-    FD_ZERO(&fds);
-    FD_SET(0, &fds);
-    int is_ready = _kbhit();
-#else
-    struct pollfd fd;
-    fd.fd = STDIN_FILENO;
-    fd.events = POLLIN;
-    fd.revents = 0;
-    int is_ready = (poll(&fd, 1, 0)>0 && ((fd.revents & POLLIN) != 0));
-#endif
-
-    // checks if it is ready
-    if (!is_ready) return;
-
-    char input[20];
-    if (fgets(input, 20, stdin) && input[0] != '\n') {
-        // got some data in input, lets parse it
-        if (strncmp(input, "quit", 4)==0) {
-            force_stop = 1;
-        } else if (strncmp(input, "stop", 4)==0) {
-            force_stop = 1;
-        }
-    }
-    fflush(stdin);
-}
-
-void Skunk::parse_option(char *command) {
-    // Not implemented
-    // get the name
-    if ((command = strstr(command, "name"))) {
-        command += 5;
-        // get the value command
-        if (strncmp(command, "UCI_AnalyseMode", 15) == 0 && (command = strstr(command, "value"))) {
-            command += 6;
-
-        }
-        else if (strncmp(command, "UCI_DefaultDepth", 16) == 0 && (command = strstr(command, "value"))) {
-            command += 6;
-            UCI_DefaultDepth = strtol(command, NULL, 10);//atoi(current_char);
-        }
-        else if (strncmp(command, "UCI_DefaultDuration", 19) == 0 && (command = strstr(command, "value"))) {
-            command += 6;
-            UCI_DefaultDuration = strtol(command, NULL, 10);
-        }
-    }
-}
-
-
-
-void Skunk::parse_debug(char *command) {
-    // not implemented
-
-}
-
-void Skunk::parse_go(char *command) {
-    int depth = UCI_DefaultDepth;
-    int duration = UCI_DefaultDuration;
-    char *current_char = NULL;
-    if ((current_char = strstr(command, "depth"))) {
-        search_type = SEARCH_DEPTH;
-        current_char += 6;
-        depth = strtol(current_char, NULL, 10);
-    } else if ((current_char = strstr(command, "movetime"))) {
-        current_char += 9;
-        search_type = SEARCH_MOVETIME;
-        UCI_DefaultDuration = strtol(current_char, NULL, 10);
+    if (std::cin.rdbuf()->in_avail() > 0) {
+        // Input is available, read it and process it
+        std::string input;
+        std::cin >> input;
+//        std::cout << "Received input: " << input << std::endl;
+//        if (input == "quit" || input == "stop") {
+        force_stop = 1;
+        printf("We got some input!\n");
+//        }
+    } else {
+        // No input is available, do something else
+//        std::cout << "Waiting for input..." << std::endl;
     }
 
-    search(search_type==SEARCH_DEPTH?depth:INT_MAX);
+//#ifdef _WIN32
+//    struct timeval timeout;
+//    timeout.tv_usec = 1;
+//    timeout.tv_sec = 0;
+//    fd_set fds;
+//    FD_ZERO(&fds);
+//    FD_SET(0, &fds);
+//    int is_ready = _kbhit();
+//#else
+//    struct pollfd fd;
+//    fd.fd = STDIN_FILENO;
+//    fd.events = POLLIN;
+//    fd.revents = 0;
+//    int is_ready = (poll(&fd, 1, 0)>0 && ((fd.revents & POLLIN) != 0));
+//#endif
+//
+//    // checks if it is ready
+//    if (!is_ready) return;
+//
+//    char input[20];
+//    if (fgets(input, 20, stdin) && input[0] != '\n') {
+//        // got some data in input, lets parse it
+//        if (strncmp(input, "quit", 4)==0) {
+//            force_stop = 1;
+//        } else if (strncmp(input, "stop", 4)==0) {
+//            force_stop = 1;
+//        }
+//    }
+//    fflush(stdin);
+}
+
+void Skunk::parse_go(char *cmd) {
+    search_depth = 0;
+    move_time = 0;
+    btime = 0;
+    wtime = 0;
+
+    std::stringstream ss(cmd);
+    std::string token;
+    while (ss >> token) {
+        if (token == "depth") {
+            ss >> search_depth;
+        } else if (token == "movetime") {
+            ss >> move_time;
+        } else if (token == "wtime") {
+            ss >> wtime;
+        } else if (token == "btime") {
+            ss >> btime;
+        }
+    }
+
+    // Check which type of search to do
+    if (move_time > 0) {
+        search(INT_MAX);
+    } else if (search_depth > 0) {
+        // Do a depth-limited search
+        search(search_depth);
+    } else if (wtime > 0 && btime > 0) {
+        // calculate movetime inteligently
+        move_time = 2000;
+        if (side == white) {
+            move_time = std::min(DEFAULT_MOVETIME, wtime);
+        } else {
+            move_time = std::min(DEFAULT_MOVETIME, btime);
+        }
+        search(INT_MAX);
+    }
 }
 
 void Skunk::parse_position(char *command) {

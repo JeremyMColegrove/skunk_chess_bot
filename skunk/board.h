@@ -61,8 +61,7 @@
 #define HASH_EXACT 0
 #define HASH_LOWERBOUND 1
 #define HASH_UPPERBOUND 2
-#define SEARCH_DEPTH 0
-#define SEARCH_MOVETIME 1
+#define DEFAULT_MOVETIME 2500 // how many ms to search for
 
 
 /*********************\
@@ -566,14 +565,12 @@ public:
 
     char *fen_start = (char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;
-    int search_type = SEARCH_MOVETIME;
     int wtime = 0;
     int btime = 0;
     int winc = 0;
     int binc = 0;
-    int UCI_DefaultDepth = 7;
-    int UCI_DebugMode = 0;
-    int UCI_DefaultDuration = 4000; // default time to search in milliseconds
+    int search_depth = 0;
+    int move_time = 0; // default time to search in milliseconds
     int UCI_AnalyseMode = 1;
     int time_check_node_interval = 50000;
     int enpassant = no_square;
