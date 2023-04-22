@@ -87,12 +87,8 @@ I would like to thank the open-source community and various resources that have 
 
 5. go [parameters]
    - Tells the engine to start calculating the best move.
-   - Parameters: depth, nodes, movetime, wtime, btime, winc, binc, movestogo
+   - Parameters: depth, movetime
    - Expected response: bestmove [Move]
 
-6. stop
-   - Tells the engine to stop calculating immediately.
-   - Expected response: bestmove [Move]
-
-7. quit
+6. quit
    - Asks the engine to quit the program.
