@@ -9,10 +9,10 @@ Table of Contents
 - [Skunk Chess Bot](#skunk-chess-bot)
   - [Table of Contents](#table-of-contents)
   - [Getting Started](#getting-started)
-- [Building Skunk](#building-skunk)
-- [Running Skunk](#running-skunk)
+  - [Building Skunk](#building-skunk)
+  - [Running Skunk](#running-skunk)
   - [Acknowledgements](#acknowledgements)
-- [Universal Chess Interface (UCI) Commands](#universal-chess-interface-uci-commands)
+  - [Universal Chess Interface (UCI) Commands](#universal-chess-interface-uci-commands)
 
 Getting Started
 ---------------
@@ -24,7 +24,7 @@ git clone https://github.com/username/Skunk.git
 cd Skunk
 ```
 
-# Building Skunk
+## Building Skunk
 To build Skunk, make sure you have a C++ compiler and CMake installed. Follow these steps:
 
 1. Create a build directory and navigate to it:
@@ -41,7 +41,7 @@ cmake ..
 make
 ```
 
-# Running Skunk
+## Running Skunk
 To run Skunk, execute the binary from the build directory:
 
 ```
@@ -50,14 +50,18 @@ To run Skunk, execute the binary from the build directory:
 
 Skunk uses the Universal Chess Interface (UCI) protocol for communication. Refer to the [UCI commands section](https://github.com/JeremyMColegrove/Skunk#universal-chess-interface-uci-commands) for a list of supported commands.
 
-Acknowledgements
+## Acknowledgements
 ----------------
 
 I would like to thank the open-source community and various resources that have helped me develop Skunk. This project would not have been possible without their valuable insights and guidance.
 
 
 
-Universal Chess Interface (UCI) Commands
+
+
+
+
+## Universal Chess Interface (UCI) Commands
 ========================================
 
 1. uci
