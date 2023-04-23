@@ -50,18 +50,18 @@ int main(int argc, char **argv) {
 }
 
 
-void automate_tests() {
-    std::vector<char *> tests;
-    tests.push_back((char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+// void automate_tests() {
+//     std::vector<char *> tests;
+//     tests.push_back((char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
-    Skunk *skunk = new Skunk();
+//     Skunk *skunk = new Skunk();
 
-    for (int test=0; test<tests.size(); test++) {
-        // this will test the fen position for x couple of seconds
-        skunk->parse_fen(tests.at(test));
-        skunk->parse_go((char *)"go movetime 1000");
-    }
-}
+//     for (int test=0; test<tests.size(); test++) {
+//         // this will test the fen position for x couple of seconds
+//         skunk->parse_fen(tests.at(test));
+//         skunk->parse_go((char *)"go movetime 1000");
+//     }
+// }
 
 
 void uci_loop() {
@@ -136,6 +136,10 @@ void parse_command(char *cmd, Skunk *skunk) {
         exit(0);
     } else if (strncmp(cmd, "perft", 5)==0) {
         skunk->parse_perft(cmd);
+    } else if (strcmp(cmd, "board")==0) {
+        skunk->print_board();
+    } else if (strcmp(cmd, "score")==0) {
+        printf("%f\n", skunk->evaluate());
     } else {
 
     }

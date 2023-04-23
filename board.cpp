@@ -15,7 +15,7 @@
 \*****************************/
 
 void Skunk::parse_fen(char *fen) {
-// reset board position (bitboards)
+    // reset board position (bitboards)
     memset(bitboards, 0ULL, sizeof(bitboards));
 
     // reset occupancies (bitboards)
@@ -27,128 +27,60 @@ void Skunk::parse_fen(char *fen) {
     enpassant = no_square;
     castle = 0;
 
-    // loop over board ranks
-    for (int rank = 0; rank < 8; rank++)
-    {
-        // loop over board files
-        for (int file = 0; file < 8; file++)
-        {
-            // init current square
-            int square = rank * 8 + file;
-
-            // match ascii pieces within FEN string
-            if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z'))
-            {
-                // init piece type
-                int piece = char_pieces[*fen];
-
-                // set piece on corresponding bitboard
-                set_bit(bitboards[piece], square);
-
-                piece_count[piece] ++;
-
-                // increment pointer to FEN string
-                fen++;
-            }
-
-            // match empty square numbers within FEN string
-            if (*fen >= '0' && *fen <= '9')
-            {
-                // init offset (convert char 0 to int 0)
-                int offset = *fen - '0';
-
-                // define piece variable
-                int piece = -1;
-
-                // loop over all piece bitboards
-                for (int bb_piece = P; bb_piece <= k; bb_piece++)
-                {
-                    // if there is a piece on current square
-                    if (get_bit(bitboards[bb_piece], square))
-                        // get piece code
-                        piece = bb_piece;
-                }
-
-                // on empty current square
-                if (piece == -1)
-                    // decrement file
-                    file--;
-
-                // adjust file counter
-                file += offset;
-
-                // increment pointer to FEN string
-                fen++;
-            }
-
+    // loop over board squares
+    for (int square = 0; square < 64; square++) {
+        if (*fen == '/') {
             // match rank separator
-            if (*fen == '/')
-                // increment pointer to FEN string
-                fen++;
+            fen++;
+            square --;
+        } else if (*fen >= '0' && *fen <= '9') {
+            // match empty square numbers within FEN string
+            square += *fen - '1'; // use '1' to offset the loop increment
+            fen++;
+        } else {
+            // match ascii pieces within FEN string
+            int piece = char_pieces[*fen];
+            set_bit(bitboards[piece], square);
+            piece_count[piece]++;
+            fen++;
         }
     }
-
-    // got to parsing side to move (increment pointer to FEN string)
-    fen++;
-
     // parse side to move
-    (*fen == 'w') ? (side = white) : (side = black);
-
-    // go to parsing castling rights
+    side = (*(++fen) == 'w') ? white : black;
     fen += 2;
 
     // parse castling rights
-    while (*fen != ' ')
-    {
-        switch (*fen)
-        {
+    while (*fen != ' ') {
+        switch (*fen++) {
             case 'K': castle |= wk; break;
             case 'Q': castle |= wq; break;
             case 'k': castle |= bk; break;
             case 'q': castle |= bq; break;
-            case '-': break;
         }
-
-        // increment pointer to FEN string
-        fen++;
     }
-
-    // got to parsing enpassant square (increment pointer to FEN string)
-    fen++;
 
     // parse enpassant square
-    if (*fen != '-')
-    {
-        // parse enpassant file & rank
-        int file = fen[0] - 'a';
-        int rank = 8 - (fen[1] - '0');
-
-        // init enpassant square
+    if (*(++fen) != '-') {
+        int file = *fen++ - 'a';
+        int rank = 8 - (*fen - '1');
         enpassant = rank * 8 + file;
+    } else {
+        enpassant = no_square;
     }
 
-        // no enpassant square
-    else
-        enpassant = no_square;
-
-    // loop over white pieces bitboards
-    for (int piece = P; piece <= K; piece++)
-        // populate white occupancy bitboard
-        occupancies[white] |= bitboards[piece];
-
-    // loop over black pieces bitboards
-    for (int piece = p; piece <= k; piece++)
-        // populate white occupancy bitboard
-        occupancies[black] |= bitboards[piece];
+    // update occupancies
+    for (int piece = P; piece <= k; piece++) {
+        occupancies[piece <= K ? white : black] |= bitboards[piece];
+    }
 
     // init all occupancies
-    occupancies[both] |= occupancies[white];
-    occupancies[both] |= occupancies[black];
+    occupancies[both] = occupancies[white] | occupancies[black];
 
     // init hash key
     zobrist = generate_zobrist();
 
     init();
+
 }
 
 
@@ -189,23 +121,6 @@ Skunk::Skunk() {
     side = white;
     //reset our castle rights
     castle = 0;
-
-    // construct the piece array char_pieces
-    // white
-    char_pieces['P'] = P;
-    char_pieces['N'] = N;
-    char_pieces['B'] = B;
-    char_pieces['R'] = R;
-    char_pieces['Q'] = Q;
-    char_pieces['K'] = K;
-
-    //black
-    char_pieces['p'] = p;
-    char_pieces['n'] = n;
-    char_pieces['b'] = b;
-    char_pieces['r'] = r;
-    char_pieces['q'] = q;
-    char_pieces['k'] = k;
 }
 
 void Skunk::init() {
@@ -233,6 +148,7 @@ void Skunk::init() {
 
     zobrist = generate_zobrist();
 
+    init_precomputed_masks();
 
     //transposition table init
     // try and init the transposition table
@@ -500,6 +416,27 @@ void Skunk::construct_knight_masks() {
     }
 }
 
+void Skunk::init_precomputed_masks() {
+    for (int square = 0; square < 64; square++) {
+        pawn_attack_span_masks[white][square] = pawn_attack_span(white, square);
+        pawn_attack_span_masks[black][square] = pawn_attack_span(black, square);
+    }
+}
+
+U64 Skunk::pawn_attack_span(int color, int square) {
+    U64 attacks = 0ULL;
+
+    // do it just for white
+    if (color == white) {
+        attacks |= rays[square-1][nearest_square[DN][square-1]] & not_h_file;
+        attacks |= rays[square+1][nearest_square[DN][square+1]] & not_a_file;
+    } else {
+        attacks |= rays[square-1][nearest_square[DS][square-1]] & not_h_file;
+        attacks |= rays[square+1][nearest_square[DS][square+1]] & not_a_file;
+    }
+    
+    return attacks;
+}
 
 void Skunk::construct_king_tables() {
     //Generate the kings tables
@@ -867,6 +804,7 @@ U64 Skunk::get_slider_attacks() {
 
     return sliders;
 }
+
 U64 Skunk::get_jumper_attacks() {
     U64 pieces;
     U64 jumpers = 0ULL;
@@ -1271,16 +1209,6 @@ void Skunk::print_moves(t_moves &moves_list)
     printf("Total of %d moves.\n", moves_list.count);
 }
 
-void Skunk::test_moves_sort() {
-    t_moves moves_list;
-    generate_moves(moves_list);
-    sort_moves(moves_list);
-    // print the scores for checking
-    for (int i = 0; i < moves_list.count; i++) {
-        printf("%d\n", score_move(moves_list.moves[i]));
-    }
-}
-
 void Skunk::sort_moves(t_moves &moves_list) {
     /****************************************\
      *             SCORE MOVES
@@ -1328,7 +1256,6 @@ int Skunk::score_move(int move) {
     if (decode_promoted(move)) {
         // we want to check promotions high as well
         score += 5000;
-
     }
 
     if (is_capture(move)) {
@@ -1373,88 +1300,99 @@ void Skunk::write_hash_entry(int score, int depth, int move, int flag) const {
 }
 
 int Skunk::quiesence(int alpha, int beta) {
-
-    q_nodes ++;
+    q_nodes++;
     if (force_stop) return 0;
 
-    // check if we should return or not
+    // Communicate with the user interface periodically
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
 
+    // Generate all legal moves
     t_moves moves_list;
-
     generate_moves(moves_list);
 
+    // Check if the king is in check
     int check = is_check();
 
-    int evaluation = evaluate() + ((int)log(moves_list.count + 1) * 0.5 * evaluation_weights[MOBILITY_WEIGHT]) - (check?evaluation_weights[KING_SAFETY_WEIGHT]:0);
+    // Calculate the evaluation score
+    int evaluation = evaluate() + static_cast<int>(log(moves_list.count + 1) * 0.5 * MOBILITY_WEIGHT) - (check ? KING_SAFETY_WEIGHT : 0);
 
-#ifdef ALPHA_BETA
+    // Alpha-beta pruning
     if (evaluation >= beta) {
         return evaluation;
     }
-#endif
-
 
     if (evaluation > alpha) {
         alpha = evaluation;
     }
 
+    // Sort the moves to improve search efficiency
     sort_moves(moves_list);
 
     int score = INT_MIN;
+    bool made_capture = false;
 
-    copy_board();
-
-    for (int i=0; i<moves_list.count; i++) {
-
+    for (int i = 0; i < moves_list.count; i++) {
         int move = moves_list.moves[i];
 
+        // Only consider capture moves in quiescence search
         if (!is_capture(move)) continue;
 
-#ifdef FUTILITY_PRUNE
-        // futility pruning. If the piece we are capturing does not help us improve, just ignore going down this branch + some margin for error (two queens)
         int victim = get_piece(decode_destination(move));
 
-        if (!is_check() && (abs(piece_scores[victim]) + evaluation + piece_scores[Q]*10) < alpha) {
+        // Futility pruning: skip moves that are unlikely to improve the position
+        if (!is_check() && (abs(piece_scores[victim]) + evaluation + piece_scores[Q] * 10) < alpha) {
             return alpha;
         }
-#endif
 
+        // Futility pruning: skip moves that are unlikely to improve the position
+        // int futility_margin = 100; // Adjust this value based on your engine's requirements
+        // if (!is_check() && (evaluation + piece_scores[victim] + futility_margin <= alpha)) {
+        //     continue;
+        // }
+
+        // Keep track of whether a capture move was made
+        made_capture = true;
+
+        // Copy the board
+        copy_board();
+
+        // Make the move on the board
         make_move(move, only_captures);
 
+        // Recursively call quiescence search with negamax
         int test = -quiesence(-beta, -alpha);
 
-        score = (((score) > (test)) ? (score) : (test));
+        // Update the best score
+        score = std::max(score, test);
 
-#ifdef DEBUG
-        assert(zobrist == generate_zobrist());
-#endif
+        // Restore the board to its previous state
         restore_board();
-        moves --;
+        moves--;
 
-#ifdef ALPHA_BETA
+        // Alpha-beta pruning
         if (score >= beta) {
             return beta;
         }
-#endif
 
         if (score > alpha) {
             alpha = score;
         }
     }
 
+    // If no legal capture moves and the king is in check, this is a checkmate
+    if (!made_capture && check) {
+        return -CHECKMATE + ply;
+    }
+
     return alpha;
 }
 
-
-
+// new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
+    nodes++;
 
-    nodes ++ ;
-
-    // check if we should quit or not
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
@@ -1462,69 +1400,41 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     if (force_stop) return 0;
 
     t_moves moves_list;
-
     generate_moves(moves_list);
-
     sort_moves(moves_list);
 
     int check = is_check();
 
-    // base case
     if (depth < 1) {
-        if (pline != NULL) pline->cmove = 0;
+        if (pline != nullptr) pline->cmove = 0;
         return quiesence(alpha, beta);
     }
 
-    // checkmate / stalemate
     if (moves_list.count == 0) {
-        if (check) {
-            return (-CHECKMATE) + ply;
-        } else return 0;
+        return check ? (-CHECKMATE) + ply : 0;
     }
 
-
-
-    // 3-fold repetition
     if (ply && is_repetition()) {
-        return -evaluate()*0.25; // instead of returning just a draw best_score, include a contempt factor (simply evaluate x weight). If white is losing, we want to draw so invert eval
+        return -evaluate() * 0.25;
     }
 
-
-    t_line line = {.cmove = 0 };
-
+    t_line line = {.cmove = 0};
     int best_score = INT_MIN, best_move = 0, current_move, current_score;
 
-    // check extension
-    if (check) depth ++;
-
+    if (check) depth++;
 
 #ifdef TRANSPOSITION_TABLE
-    /*
-     * A copy of alpha so that we can compare for our TT later
-     */
     int _alpha = alpha;
-    /*
-     * Check if there is a valid transposition table entry that we can use instead
-     * Try to get a transposition table entry and check its relationship with alpha, beta.
-     * We might have to restore alpha, beta instead of exact value.
-     * If we find an exact value and the ply is 1, we need to send current_move to principle variation line
-     */
     t_entry *entry = &transposition_table[zobrist % HASH_SIZE];
-
     int is_pv = (beta - alpha) > 1;
 
-    if (entry->hash == zobrist && entry->depth>=depth && !is_pv) {
+    if (entry->hash == zobrist && entry->depth >= depth && !is_pv) {
         int score = entry->score;
 
         switch (entry->flags) {
             case HASH_EXACT:
                 cache_hit++;
-                /*
-                 * If the ply is 0 and we find a hit we need to send current_move to principle variation line so it has a current_move
-                 * However, if the ply is greater than one we do not NEED to put current_move in PV line.
-                 */
-                if (ply == 0 && pline != NULL) {
-                    // write the current_move to our PV line
+                if (ply == 0 && pline != nullptr) {
                     pline->argmove[0] = entry->move;
                     memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                     pline->cmove = line.cmove + 1;
@@ -1546,17 +1456,19 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     }
 #endif
 
+
+        // Verified null move and other code here...
 #ifdef VERIFIED_NULL_MOVE
     int fail_high = 0;
 
     if (!check && (!verify || depth > 1) && do_null == DO_NULL) {
-        // make null current_move
+        // make null move
         copy_board();
         side ^= 1;
         zobrist ^= side_key;
         if (enpassant != no_square) zobrist ^= enpassant_keys[enpassant];
         enpassant = no_square;
-        int null_move = -negamax(-beta, -beta+1, depth - NULL_R, verify, NO_NULL, NULL);
+        int null_move = -negamax(-beta, -beta+1, depth - NULL_R, verify, NO_NULL, nullptr);
         side ^= 1;
         restore_board();
 
@@ -1571,65 +1483,32 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
     }
 #endif
-#ifdef NULL_MOVE
-    /*
-     * Lets do some null current_move pruning here to see if our opponent has a response to this current_move
-     */
-    if (do_null==DO_NULL && !check && ply && depth >= NULL_R + 1) {
-        // switch sides
-        copy_board();
-        side ^= 1;
-        zobrist ^= side_key;
-        if (enpassant != no_square) zobrist ^= enpassant_keys[enpassant];
-        enpassant = no_square;
-        /*
-         * Here we make a call to negamax again, so our opponent makes two moves in a row.
-         * We do not want this current_move to contribute to our PV, so we pass null in for that arg
-         */
-        int best_score = -negamax(-beta, -beta+1, depth - 1 - NULL_R, verify, NO_NULL, NULL);
-        side ^= 1;
-        restore_board();
-        if (best_score >= beta) {
-//            depth -= NULL_R;
-            return  beta;
-        }
-    }
-#endif
 
     copy_board();
 
-    // loop through each current_move
-    for (int i = 0; i<moves_list.count; i++) {
-
+    for (int i = 0; i < moves_list.count; i++) {
         current_move = moves_list.moves[i];
-
         make_move(current_move, all_moves);
-
-#ifdef DEBUG
-        assert(zobrist == generate_zobrist());
-#endif
-
-        ply ++;
-
+        ply++;
         repitition.table[repitition.count++] = zobrist;
 
-
-        search:
         if (i == 0) {
-            current_score = -negamax(-beta, -alpha, depth -1, verify, DO_NULL, &line);
-        }
-        else {
-            // LMR
+            current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+        } else {
+            // Late Move Reductions (LMR)
             if (i > 3 && depth > 2 && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
                 int LMR_R = 2;
-                current_score = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, NULL);
-            } else current_score = alpha + 1;
+                current_score = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, nullptr);
+            } else {
+                current_score = alpha + 1;
+            }
 
-            // PVS
-            if (current_score > alpha)
-            {
-                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify,NO_NULL, NULL);
-                if (current_score > alpha && current_score < beta) current_score = -negamax(-beta, -alpha, depth - 1, verify,DO_NULL, &line);
+            // Principal Variation Search (PVS)
+            if (current_score > alpha) {
+                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, nullptr);
+                if (current_score > alpha && current_score < beta) {
+                    current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+                }
             }
         }
 
@@ -1638,34 +1517,22 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             best_move = current_move;
         }
 
-#ifdef VERIFIED_NULL_MOVE
-        // check if zugzwang is detected, if so, re-search with increased depth
-        if (fail_high && best_score < beta) {
-            depth++;
-            fail_high = false;
-            verify = 1;
-            goto search;
-        }
-#endif
-
         restore_board();
-        ply --;
+        ply--;
         repitition.count--;
-        moves --;
+        moves--;
 
         if (best_score > alpha) {
             alpha = best_score;
-            // write the current_move to our PV line
-            if (pline != NULL) {
+            if (pline != nullptr) {
                 pline->argmove[0] = current_move;
                 memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                 pline->cmove = line.cmove + 1;
             }
         }
 
-        // beta cutoff
         if (alpha >= beta) {
-
+            // Update killer moves and history here...
 #ifdef KILLER_HISTORY
             // ADD mask ply check here to avoid segfaults
             if (!is_capture(current_move) && ply < MAX_PLY) {
@@ -1676,16 +1543,11 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 #endif
 
             write_hash_entry(beta, depth, best_move, HASH_LOWERBOUND);
-
-#ifdef ALPHA_BETA
             return beta;
-#endif
         }
     }
 
-    /*
-     * We update our transposition table entry to reflect current best_score of node, etc.
-     */
+    // Update transposition table here...
 #ifdef TRANSPOSITION_TABLE
     int flag = HASH_EXACT;
     if (best_score <= _alpha) flag = HASH_UPPERBOUND;
@@ -1695,6 +1557,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     return best_score;
 }
+
 
 
 // the top level call to get the best move
@@ -1763,188 +1626,216 @@ int Skunk::search(int maxDepth) {
     return pline.argmove[0];
 }
 
-int Skunk::evaluate() {
 
-    // count the number of major pieces
-    is_endgame = 0;
-    int num_majors = 0;
-    for (int piece = P; piece<=k; piece++) {
-        if (piece == P || piece == p) continue;
-        num_majors += piece_count[piece];
+float Skunk::evaluation_weights[NUM_WEIGHTS] = {
+    1.5f,  // MATERIAL_WEIGHT
+    1.0f,  // PIECE_SCORE_WEIGHT
+    0.3f,  // DOUBLED_PAWNS_WEIGHT
+    0.3f,  // ISOLATED_PAWNS_WEIGHT
+    0.75f, // PASSED_PAWN_WEIGHT
+    0.7f,  // MOBILITY_WEIGHT
+    0.2f   // KING_SAFETY_WEIGHT
+};
+
+
+float Skunk::evaluate() {
+    // material_score is how many total pieces are on the board
+    float material_score = 0;
+    float white_material_score = 0;
+    float black_material_score = 0;
+    float pawn_structure_score = 0;
+    float passed_pawn_score = 0;
+    float mobility_score = 0;
+    float king_safety_score = 0;
+    float game_phase;
+
+    // get total points on the board to taper endgame
+    for (int piece = P; piece <= K; piece++) {
+        white_material_score += bit_count(bitboards[piece]) * piece_scores[piece];
     }
 
-    // idk about this lower bound...
-    if (num_majors < 8) {
-        is_endgame = 1;
+    // get total points on the board to taper endgame
+    for (int piece = p; piece <= k; piece++) {
+        black_material_score += bit_count(bitboards[piece]) * piece_scores[piece];
     }
 
-    // simply evaluates the piece scores
-    U64 bitboard;
-    float score = 0;
-    int empty_files = 0, isolated_pawns = 0, square_score;
+    // Calculate the scores for each aspect of the game
+    material_score = calculate_material_score();
+    pawn_structure_score = calculate_pawn_structure_score();
+    mobility_score = calculate_mobility_score();
+    king_safety_score = calculate_king_safety_score();
+
+    // Determine the game phase
+    game_phase = calculate_game_phase(white_material_score + -black_material_score);
+
+    // Combine the scores for each aspect, considering the game phase
+    float opening_score = material_score + pawn_structure_score + mobility_score + king_safety_score;
+    float endgame_score = material_score + pawn_structure_score;
+
+    float score = opening_score * game_phase + endgame_score * (1.0f - game_phase);
+
+    // Return the score based on the side to move
+    return (side == white ? score : -score);
+}
+
+float Skunk::calculate_game_phase(int total_material) {
+    int max_material = 2 * (piece_scores[Q] + 2 * piece_scores[R] + 2 * piece_scores[B] + 2 * piece_scores[N] + 8 * piece_scores[P] + piece_scores[K]);
+    return (float)total_material / max_material;
+}
+
+float Skunk::calculate_material_score() {
+    int material_score = 0;
+
     for (int piece = P; piece <= k; piece++) {
-        bitboard = bitboards[piece];
+        material_score += piece_count[piece] * piece_scores[piece];
+    }
 
+    return material_score;
+}
+
+
+float Skunk::calculate_pawn_structure_score() {
+    float pawn_structure_score = 0;
+    U64 white_pawns = bitboards[P];
+    U64 black_pawns = bitboards[p];
+
+    for (int file = 0; file < 8; file++) {
+        U64 white_pawns_on_file = file_masks[MIDDLE][file] & white_pawns;
+        U64 black_pawns_on_file = file_masks[MIDDLE][file] & black_pawns;
+
+        // Evaluate doubled pawns
+        if (bit_count(white_pawns_on_file) > 1) {
+            pawn_structure_score -= evaluation_weights[DOUBLED_PAWNS_WEIGHT] * (float)(bit_count(white_pawns_on_file) - 1);
+        }
+
+        if (bit_count(black_pawns_on_file) > 1) {
+            pawn_structure_score += evaluation_weights[DOUBLED_PAWNS_WEIGHT] * (float)(bit_count(black_pawns_on_file) - 1);
+        }
+
+
+        // Evaluate isolated pawns
+        bool white_pawns_on_left_file = file > 0 && (file_masks[MIDDLE][file - 1] & bitboards[P]);
+        bool white_pawns_on_right_file = file < 7 && (file_masks[MIDDLE][file + 1] & bitboards[P]);
+
+        bool black_pawns_on_left_file = file > 0 && (file_masks[MIDDLE][file - 1] & bitboards[p]);
+        bool black_pawns_on_right_file = file < 7 && (file_masks[MIDDLE][file + 1] & bitboards[p]);
+
+        if (white_pawns_on_file && !white_pawns_on_left_file && !white_pawns_on_right_file) {
+            pawn_structure_score -= evaluation_weights[ISOLATED_PAWNS_WEIGHT] * bit_count(white_pawns_on_file);
+        }
+
+        if (black_pawns_on_file && !black_pawns_on_left_file && !black_pawns_on_right_file) {
+            pawn_structure_score += evaluation_weights[ISOLATED_PAWNS_WEIGHT] * bit_count(black_pawns_on_file);
+        }
+    }
+
+    // evaluate passed pawns
+    int white_passed_pawns = 0, black_passed_pawns = 0;
+    
+    U64 pawns = white_pawns;
+    while (pawns > 0) {
+        int square = get_ls1b_index(pawns);
+
+        // get the attacks for this pawn and and it with black pawns to get if it is a passed pawn
+        if ((pawn_attack_span_masks[white][square] & black_pawns) == 0) {
+            white_passed_pawns ++;
+        }
+        pop_lsb(pawns);
+    }
+
+    pawns = black_pawns;
+     while (pawns > 0) {
+        int square = get_ls1b_index(pawns);
+
+        // get the attacks for this pawn and and it with black pawns to get if it is a passed pawn
+        if ((pawn_attack_span_masks[black][square] & white_pawns) == 0) {
+            black_passed_pawns ++;
+        }
+
+        pop_lsb(pawns);
+    }
+
+
+
+    pawn_structure_score += evaluation_weights[PASSED_PAWN_WEIGHT] * bit_count(white_passed_pawns);
+    pawn_structure_score -= evaluation_weights[PASSED_PAWN_WEIGHT] * bit_count(black_passed_pawns);
+
+    return pawn_structure_score;
+}
+
+
+float Skunk::calculate_mobility_score() {
+    float mobility_score = 0;
+    int pieces[] = {N, R, B, n, r, b};
+
+    for (int i = 0; i < 6; i++) {
+        int piece = pieces[i];
+        U64 bitboard = bitboards[piece];
         while (bitboard) {
             int square = get_ls1b_index(bitboard);
 
-            /*********************\
-                  SQUARE TABLE
-            \*********************/
-
-
-            if (piece >= p)
-            {
-                score -= (1 - is_endgame)*square_scores[piece % 6][mirror_score[square]] + is_endgame*eg_tables[piece % 6][square] ;
-            }
-            else
-            {
-                score += (1 - is_endgame)*square_scores[piece % 6][mirror_score[square]] + is_endgame*eg_tables[piece % 6][square] ;
-            }
-
-            /*********************\
-                  PIECE SCORE
-            \*********************/
-
-            score += piece_scores[piece] * evaluation_weights[PIECE_SCORE_WEIGHT];
-
-            pop_lsb(bitboard);
-        }
-    }
-
-    /**************************************\
-         DOUBLED PAWNS & ISOLATED PAWNS
-    \**************************************/
-
-    // check for doubled pawns for white
-    U64 left, middle, right;
-    for (int file = 0; file<8; file++) {
-        middle = file_masks[MIDDLE][file] & bitboards[P];
-        left = file_masks[LEFT][file] & bitboards[P];
-        right = file_masks[RIGHT][file] & bitboards[P];
-
-        //isolated pawns
-        if (middle && !left && !right)
-        {
-            score -= evaluation_weights[ISOLATED_PAWNS_WEIGHT]; // the pawn may as well be half gone
-        }
-
-        if (!middle)
-            empty_files++;
-    }
-
-    // check white doubled pawns penalty
-    if (empty_files + piece_count[P] > 8) {
-        score -=  evaluation_weights[DOUBLED_PAWNS_WEIGHT] * ((empty_files + piece_count[P]) - 8);
-    }
-
-    empty_files = 0;
-
-    // check for doubled pawns for black
-    for (int file = 0; file<8; file++) {
-        middle = (file_masks[MIDDLE][file] & bitboards[p]);
-        left = (file_masks[LEFT][file] & bitboards[p]);
-        right = (file_masks[RIGHT][file] & bitboards[p]);
-
-        if (middle && !left && !right) {
-            // isolated pawn
-            score += evaluation_weights[ISOLATED_PAWNS_WEIGHT]; // the pawn may as well be half gone
-        }
-
-        if (!middle) {
-            empty_files++;
-        }
-    }
-
-    // check black doubled pawns penalty
-    if (empty_files + piece_count[p] > 8) {
-        score += evaluation_weights[DOUBLED_PAWNS_WEIGHT] * ((empty_files + piece_count[p]) - 8);
-    }
-
-    /*********************\
-        PASSED PAWNS
-    \*********************/
-
-    int square;
-    U64 mask;
-
-    // white passed pawns
-    bitboard = bitboards[P];
-    while (bitboard) {
-        square = get_ls1b_index(bitboard);
-        mask = (rays[square-1][nearest_square[DN][square-1]] & not_h_file) | rays[square][nearest_square[DN][square]] | (rays[square+1][nearest_square[DN][square+1]] & not_a_file) ;
-        if (!(mask & bitboards[p])) {
-            score += evaluation_weights[PASSED_PAWN];
-        }
-        pop_lsb(bitboard);
-    }
-
-    // black passed pawns
-    bitboard = bitboards[p];
-    while (bitboard) {
-        square = get_ls1b_index(bitboard);
-        mask = (rays[square-1][nearest_square[DS][square-1]] & not_h_file) | rays[square][nearest_square[DS][square]] | (rays[square+1][nearest_square[DS][square+1]] & not_a_file) ;
-        if (!(mask & bitboards[P])) {
-            score -= evaluation_weights[PASSED_PAWN];
-        }
-        pop_lsb(bitboard);
-    }
-
-    /*********************\
-            MOBILITY
-    \*********************/
-
-    // piece white mobility (knights, rooks, bishops)
-    int pieces[] = {N, R, B, n, r, b};
-    for (int i = 0; i<6; i++) {
-        int piece = pieces[piece];
-        bitboard = bitboards[pieces[piece]];
-        while (bitboard) {
-            square = get_ls1b_index(bitboard);
-
-            // get this pieces moves
+            // Get this piece's moves
             if (piece >= n) {
-
-                score -= log(bit_count(get_attacks(piece, square, black) + 1)) * evaluation_weights[MOBILITY_WEIGHT];
+                mobility_score -= log(bit_count(get_attacks(piece, square, black)) + 1) * evaluation_weights[MOBILITY_WEIGHT];
             } else {
-                score += log(bit_count(get_attacks(piece, square, white) + 1)) * evaluation_weights[MOBILITY_WEIGHT];
+                mobility_score += log(bit_count(get_attacks(piece, square, white)) + 1) * evaluation_weights[MOBILITY_WEIGHT];
             }
             pop_lsb(bitboard);
         }
     }
 
-    /*********************\
-         KING SAFETY
-    \*********************/
+    return mobility_score;
+}
 
-    // get the distance to all of the other pieces
-    //white
-    // this should only count towards the beginning of the game
-    int king_square = get_ls1b_index(bitboards[K]), distance, total, row_attacker, column_attacker, row_king = king_square/8, column_king=king_square%8;
-    if (!is_endgame) {
-        for (int piece = p; piece < k; piece++) {
-            bitboard = bitboards[piece];
-            total = 0;
-            while (bitboard) {
-                square = get_ls1b_index(bitboard);
-                // get distance to the piece
-                // get row and column
-                row_attacker = square / 8;
-                column_attacker = square % 8;
+float Skunk::calculate_king_safety_score() {
+    float king_safety_score = 0;
 
-                distance = 16 - (abs(row_king - row_attacker) + abs(column_king - column_attacker));
 
-                total -= distance * king_distance_heuristic[piece % 6];
+    int king_square_white = get_ls1b_index(bitboards[K]);
+    int king_square_black = get_ls1b_index(bitboards[k]);
 
-                pop_lsb(bitboard);
-            }
-            score += (total/10);
+    // White king safety
+    int white_king_distance = 0;
+    for (int piece = p; piece < k; piece++) {
+        U64 bitboard = bitboards[piece];
+        while (bitboard) {
+            int square = get_ls1b_index(bitboard);
+            int row_attacker = square / 8;
+            int column_attacker = square % 8;
+            int row_king = king_square_white / 8;
+            int column_king = king_square_white % 8;
+
+            int distance = 16 - (abs(row_king - row_attacker) + abs(column_king - column_attacker));
+            white_king_distance -= distance * king_distance_heuristic[piece % 6];
+
+            pop_lsb(bitboard);
         }
     }
 
+    king_safety_score += (white_king_distance / 10);
 
-    return (side==white?score:-score);
+    // Black king safety
+    int black_king_distance = 0;
+    for (int piece = P; piece < K; piece++) {
+        U64 bitboard = bitboards[piece];
+        while (bitboard) {
+            int square = get_ls1b_index(bitboard);
+            int row_attacker = square / 8;
+            int column_attacker = square % 8;
+            int row_king = king_square_black / 8;
+            int column_king = king_square_black % 8;
+
+            int distance = 16 - (abs(row_king - row_attacker) + abs(column_king - column_attacker));
+            black_king_distance -= distance * king_distance_heuristic[piece % 6];
+
+            pop_lsb(bitboard);
+        }
+    }
+    king_safety_score -= (black_king_distance / 10);
+
+    return king_safety_score * evaluation_weights[KING_SAFETY_WEIGHT];
 }
+
 
 int Skunk::coordinate_to_square(char *coordinate) {
     for (int i=0; i<64; i++) {

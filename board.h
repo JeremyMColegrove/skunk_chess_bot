@@ -34,7 +34,7 @@
 #define HASH_SIZE 399990
 
 // flag for enabling futility pruning in quiescence search
-//#define FUTILITY_PRUNE
+#define FUTILITY_PRUNE
 
 // flag for enabling NULL MOVE in negamax (DEPRECATED. USE VERIFIED NULL MOVE INSTEAD)
 //#define NULL_MOVE
@@ -62,6 +62,7 @@
 #define HASH_LOWERBOUND 1
 #define HASH_UPPERBOUND 2
 #define DEFAULT_MOVETIME 2500 // how many ms to search for
+
 
 
 /*********************\
@@ -120,12 +121,37 @@ U64 zobrist_copy = zobrist; \
     zobrist = zobrist_copy; \
 
 
-
 /*********************\
      ENUMERATIONS
 \*********************/
 
-enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, PASSED_PAWN, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
+enum EvaluationWeights {
+    MATERIAL_WEIGHT,
+    PIECE_SCORE_WEIGHT,
+    DOUBLED_PAWNS_WEIGHT,
+    ISOLATED_PAWNS_WEIGHT,
+    PASSED_PAWN_WEIGHT,
+    MOBILITY_WEIGHT,
+    KING_SAFETY_WEIGHT,
+    NUM_WEIGHTS
+};
+
+const int piece_scores[12] = {
+    100, // Pawn (P)
+    320, // Knight (N)
+    330, // Bishop (B)
+    500, // Rook (R)
+    900, // Queen (Q)
+    0,   // King (K) (not used in the evaluation function)
+    -100, // Pawn (p)
+    -320, // Knight (n)
+    -330, // Bishop (b)
+    -500, // Rook (r)
+    -900, // Queen (q)
+    0    // King (k) (not used in the evaluation function)
+};
+
+// enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, PASSED_PAWN, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
 
 enum {all_moves, only_captures};
 
@@ -214,6 +240,12 @@ typedef struct {
 
 class Skunk {
 public:
+
+    static float evaluation_weights[NUM_WEIGHTS];
+
+    U64 pawn_attack_span_masks[2][64];
+
+
     const int lsb_64_table[64] =
             {
                     63, 30,  3, 32, 59, 14, 11, 33,
@@ -234,6 +266,8 @@ public:
             "a3", "b3", "c3", "d3", "e3", "f3", "g3", "h3",
             "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2",
             "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1"};
+
+    
 
     const int bishop_relevant_bits[64] = {
             6, 5, 5, 5, 5, 5, 5, 6,
@@ -437,7 +471,11 @@ public:
             100, 200, 300, 400, 500, 600,  100, 200, 300, 400, 500, 600
     };
     unsigned int seed = 1804289383;
-    int char_pieces[115];
+    // int char_pieces[115];
+    int char_pieces[128] = {
+        ['P'] = P, ['N'] = N, ['B'] = B, ['R'] = R, ['Q'] = Q, ['K'] = K,
+        ['p'] = p, ['n'] = n, ['b'] = b, ['r'] = r, ['q'] = q, ['k'] = k,
+    };
 
 
     Skunk();
@@ -464,12 +502,9 @@ public:
     int nearest_square[8][64]; // given a direction and a square, give me the furthest square in that direction
 
     // EVALUATION
-//enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, PASSED_PAWN, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
-    float evaluation_weights[8] = {600, 20, 50, 25, 50, 2, 50, 1};
     int king_distance_heuristic[5] = {10, 20, 25, 30, 40};
     int castled = 0;
     int moves = 0;
-    int is_endgame = 0;
 
     // ZOBRISK HASHING
     U64 piece_keys[12][64];
@@ -489,9 +524,12 @@ public:
     t_repitition repitition;
 
 
+
     t_line previous_pv_line;
 
     inline int is_repetition();
+    void init_precomputed_masks();
+    U64 pawn_attack_span(int color, int square);
     inline void construct_rays();
     inline void construct_file_masks();
     inline void construct_direction_rays();
@@ -511,7 +549,7 @@ public:
     inline void print_move_detailed(int move);
     inline int make_move(int move, int move_flag);
     inline void perft_test(int depth);
-    int evaluate();
+    float evaluate();
     inline int null_ok();
     inline int search(int maxDepth);
     inline int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
@@ -574,6 +612,7 @@ public:
     int UCI_AnalyseMode = 1;
     int time_check_node_interval = 50000;
     int enpassant = no_square;
+    int side = white;
 
 //    int weights[10] = {};
 
@@ -592,7 +631,12 @@ private:
     void construct_slider_attacks();
     void add_move(t_moves &moves_list, int move);
     void clear_moves();
-    int side = white;
+    float calculate_material_score();
+    float calculate_pawn_structure_score();
+    float calculate_passed_pawn_score();
+    float calculate_mobility_score();
+    float calculate_king_safety_score();
+    float calculate_game_phase(int material_score);
     int castle = 0;
     int full_moves = 0;
     int ply = 0;

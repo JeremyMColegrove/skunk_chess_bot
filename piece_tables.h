@@ -6,21 +6,8 @@
 #define SKUNK_PIECE_TABLES_H
 
 
-// score tables for evaluating pieces
-const int piece_scores[12] = {
-        1,
-        3,
-        4,
-        5,
-        10,
-        100,
-        -1,
-        -3,
-        -4,
-        -5,
-        -10,
-        -100
-};
+
+
 
 
 // pawn positional score
