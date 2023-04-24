@@ -1652,38 +1652,37 @@ int Skunk::search(int maxDepth) {
 
     force_stop = 0;
 
-    int score, useable_depth = 0;
+    int score, result;
     cache_hit = 0;
     q_nodes = 0;
     nodes = 0;
 
     int alpha = INT_MIN + 1, beta = INT_MAX, test;
 
-    for (int depth = 1; depth <= maxDepth; depth++) {
+    for (int depth = 0; depth < maxDepth; depth++) {
 
         ply = 0;
         pline.cmove = 0;
 
-        test = negamax(alpha, beta, depth, 1, DO_NULL, &pline);
+        score = negamax(alpha, beta, depth, 1, DO_NULL, &pline);
 
         if (force_stop) break;
 
-        useable_depth = depth;
+        // result = score;
 
-        // print each depth
+        // print for each depth
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
         if (test < -CHECKMATE + 2000) {
-            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, useable_depth, nodes, q_nodes, elapsed);
+            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, depth + 1, nodes, q_nodes, elapsed);
         } else if (test > CHECKMATE - 2000) {
-            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, useable_depth, nodes, q_nodes, elapsed);
+            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, depth + 1, nodes, q_nodes, elapsed);
         } else {
-            printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, useable_depth, nodes, q_nodes, elapsed);
+            printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, depth + 1, nodes, q_nodes, elapsed);
         } 
 
+        // print pv lines
         for (int i=0; i<previous_pv_line.cmove; i++) {
-            // loop over the moves within a PV line
-            // print PV move
             print_move(previous_pv_line.argmove[i]);
             printf(" ");
         }
@@ -1691,30 +1690,8 @@ int Skunk::search(int maxDepth) {
 
         // copy this pline to the previous pline struct so we can use it in next search
         memcpy(&previous_pv_line, &pline, sizeof(t_line));
-        score = test;
     }
 
-    if (UCI_AnalyseMode)
-    {
-        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
-
-        if (score < -CHECKMATE + 2000) {
-            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, useable_depth, nodes, q_nodes, elapsed);
-        } else if (score > CHECKMATE - 2000) {
-            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, useable_depth, nodes, q_nodes, elapsed);
-        } else {
-            printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, useable_depth, nodes, q_nodes, elapsed);
-        }
-
-        for (int i=0; i<previous_pv_line.cmove; i++) {
-            // loop over the moves within a PV line
-            // print PV move
-            print_move(previous_pv_line.argmove[i]);
-            printf(" ");
-        }
-        printf("\n");
-    }
 
     printf("bestmove ");
     print_move(previous_pv_line.argmove[0]);
