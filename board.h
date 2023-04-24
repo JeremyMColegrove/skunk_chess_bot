@@ -37,13 +37,52 @@
 #define FUTILITY_PRUNE
 
 // flag for enabling NULL MOVE in negamax (DEPRECATED. USE VERIFIED NULL MOVE INSTEAD)
-//#define NULL_MOVE
+// #define NULL_MOVE
 
 // flag for verified null move pruning
 #define VERIFIED_NULL_MOVE
+/*
+with:
+info transpositions 123589 ttp: 0.0772 score cp -103 depth 8 nodes 1600156 q_nodes 1503679 time 2051 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
+bestmove h4f2
 
+without:
+info transpositions 77515 ttp: 0.0574 score cp -103 depth 8 nodes 1350171 q_nodes 1412232 time 2057 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
+bestmove h4f2
+*/
 // flag for killer and history move orderings
 #define KILLER_HISTORY
+/*
+with:
+info transpositions 245891 ttp: 0.0609 score mate 5 depth 9 nodes 4039027 q_nodes 3955721 time 5553 pv h4f4 e3d3 h2h3 d3e2 f4f3 e2d2 f3f2 c3e2 b8f4 d2e1 h3h1 e1f1 h3h1 d5d6 
+bestmove h4f4
+
+without:
+info transpositions 279561 ttp: 0.0632 score mate 5 depth 9 nodes 4426878 q_nodes 4136529 time 3474 pv h4f4 e3d3 h2h3 d3e2 f4f3 e2d2 f3f2 c3e2 b8f4 d2e1 h3h1 a8b8 
+bestmove h4f4
+
+without:
+info transpositions 128760 ttp: 0.0536 score cp -103 depth 8 nodes 2400091 q_nodes 2398103 time 2008 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
+bestmove h4f2
+
+info transpositions 133297 ttp: 0.0533 score cp -103 depth 8 nodes 2500187 q_nodes 2489157 time 2004 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
+bestmove h4f2
+
+with:
+info transpositions 123589 ttp: 0.0772 score cp -103 depth 8 nodes 1600156 q_nodes 1503679 time 2051 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
+bestmove h4f2
+
+
+with sorting killer heuristic:
+info transpositions 78277 ttp: 0.0602 score cp -103 depth 8 nodes 1300125 q_nodes 1518580 time 2054 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
+bestmove h4f2
+
+without sorting:
+info transpositions 42553 ttp: 0.0266 score cp -475 depth 5 nodes 1600088 q_nodes 3748965 time 2036 pv b8f4 e3d3 f4c1 d1c1 h4f2 a8h8 
+bestmove b8f4
+*/
+//nodes  9962767 q_nodes  8342748
+//nodes 16636803 q_nodes 15374640
 
 // alpha beta flag
 #define ALPHA_BETA
@@ -61,7 +100,7 @@
 #define HASH_EXACT 0
 #define HASH_LOWERBOUND 1
 #define HASH_UPPERBOUND 2
-#define DEFAULT_MOVETIME 2500 // how many ms to search for
+#define DEFAULT_MOVETIME 10000 // how many ms to search for
 
 
 
@@ -516,7 +555,13 @@ public:
     int piece_count[12];
     int killer_moves[2][MAX_PLY];
     //history, side->source->destination (alternative could be piece->destination)
-    int history_moves[2][64][64];
+    // int history_moves[2][64][64];
+    
+    // Killer moves table (two moves per ply)
+    int killerMoves[MAX_PLY][2];
+
+    // History table (for each piece and destination square)
+    int history_table[12][64];
 
     t_entry *transposition_table = NULL; // tt table for negamax search
 
@@ -530,6 +575,8 @@ public:
     inline int is_repetition();
     void init_precomputed_masks();
     U64 pawn_attack_span(int color, int square);
+    void update_heuristics(int ply, int move, int depth);
+    inline void init_heuristics();
     inline void construct_rays();
     inline void construct_file_masks();
     inline void construct_direction_rays();
@@ -549,16 +596,16 @@ public:
     inline void print_move_detailed(int move);
     inline int make_move(int move, int move_flag);
     inline void perft_test(int depth);
-    float evaluate();
+    int evaluate();
     inline int null_ok();
     inline int search(int maxDepth);
     inline int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
     inline int quiesence(int alpha, int beta);
-
+    void show_sort();
     inline int is_check();
     inline int coordinate_to_square(char *coordinate);
     inline int score_move(int move);
-    inline void sort_moves(t_moves &moves_list);
+    void sort_moves(int *moves, int num_moves);
     inline unsigned int get_random_U32_number();
     inline U64 get_random_U64_number();
     inline U64 generate_zobrist();
@@ -631,11 +678,13 @@ private:
     void construct_slider_attacks();
     void add_move(t_moves &moves_list, int move);
     void clear_moves();
-    float calculate_material_score();
-    float calculate_pawn_structure_score();
-    float calculate_passed_pawn_score();
-    float calculate_mobility_score();
-    float calculate_king_safety_score();
+    int calculate_material_score();
+    int calculate_square_occupancy_score();
+    int calculate_square_occupancy_score_endgame();
+    int calculate_pawn_structure_score();
+    int calculate_passed_pawn_score();
+    int calculate_mobility_score();
+    int calculate_king_safety_score();
     float calculate_game_phase(int material_score);
     int castle = 0;
     int full_moves = 0;

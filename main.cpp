@@ -140,8 +140,8 @@ void parse_command(char *cmd, Skunk *skunk) {
         skunk->print_board();
     } else if (strcmp(cmd, "score")==0) {
         printf("%f\n", skunk->evaluate());
-    } else {
-
+    } else if (strcmp(cmd, "sort")==0) {
+        skunk -> show_sort();
     }
 //    if (strncmp(input, "isready", 7)==0) {
 //        printf("readyok\n");
