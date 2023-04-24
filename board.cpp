@@ -1657,7 +1657,7 @@ int Skunk::search(int maxDepth) {
     q_nodes = 0;
     nodes = 0;
 
-    int alpha = INT_MIN + 1, beta = INT_MAX, test;
+    int alpha = INT_MIN + 1, beta = INT_MAX;
 
     for (int depth = 0; depth < maxDepth; depth++) {
 
@@ -1668,14 +1668,12 @@ int Skunk::search(int maxDepth) {
 
         if (force_stop) break;
 
-        // result = score;
-
         // print for each depth
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
-        if (test < -CHECKMATE + 2000) {
+        if (score < -CHECKMATE + 2000) {
             printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, depth + 1, nodes, q_nodes, elapsed);
-        } else if (test > CHECKMATE - 2000) {
+        } else if (score > CHECKMATE - 2000) {
             printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, depth + 1, nodes, q_nodes, elapsed);
         } else {
             printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, depth + 1, nodes, q_nodes, elapsed);
