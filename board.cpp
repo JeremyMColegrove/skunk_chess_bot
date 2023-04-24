@@ -6,6 +6,7 @@
 #include <iostream>
 #include <sstream>
 #include <cmath>
+#include <algorithm>
 
 
 /*****************************\
@@ -149,6 +150,8 @@ void Skunk::init() {
     zobrist = generate_zobrist();
 
     init_precomputed_masks();
+    
+    init_heuristics();
 
     //transposition table init
     // try and init the transposition table
@@ -725,6 +728,7 @@ void Skunk::print_board() {
     //print castling rights
     std::cout << "\nCastling: " << ((castle&wk) ? 'K':'-') << ((castle&wq)?'Q':'-') << ((castle&bk)?'k':'-') << ((castle&bq)?'q':'-') << std::endl;
 
+    printf("Positional score: %f\n", evaluate());
 }
 
 /*****************************\
@@ -1209,33 +1213,89 @@ void Skunk::print_moves(t_moves &moves_list)
     printf("Total of %d moves.\n", moves_list.count);
 }
 
-void Skunk::sort_moves(t_moves &moves_list) {
-    /****************************************\
-     *             SCORE MOVES
-    \****************************************/
-    // do an insertion sort for best-case O(n) time
-    int scores[moves_list.count];
-    // compute the scores for each move
-    for (int i=0; i<moves_list.count; i++) {
-        scores[i] = score_move(moves_list.moves[i]);
+void Skunk::init_heuristics() {
+    // Initialize killer moves and history table to zero
+    for (int i = 0; i < MAX_PLY; ++i) {
+        killerMoves[i][0] = -1;
+        killerMoves[i][1] = -1;
     }
-
-    /****************************************\
-     *             INSERTION SORT
-    \****************************************/
-    for (int i=1; i<moves_list.count; i++) {
-        int score = scores[i];
-        int move = moves_list.moves[i];
-
-        int j = i - 1;
-        while (j >= 0 && scores[j] < score) {
-            scores[j+1] = scores[j];
-            moves_list.moves[j+1] = moves_list.moves[j];
-            j --;
+    for (int piece = P; piece <= k; ++piece) {
+        for (int square = 0; square < 64; ++square) {
+            history_table[piece][square] = 0;
         }
-        scores[j + 1] = score;
-        moves_list.moves[j + 1] = move;
     }
+}
+
+// Update the killer moves and history table
+void Skunk::update_heuristics(int ply, int move, int depth) {
+    // Update killer moves
+    if (move != killer_moves[ply][0]) {
+        killer_moves[ply][1] = killer_moves[ply][0];
+        killer_moves[ply][0] = move;
+    }
+
+    // Update history table
+    int piece = decode_piece(move);
+    int destination = decode_destination(move);
+    history_table[piece][destination] += depth * depth;
+}
+
+void Skunk::sort_moves(int *moves, int num_moves) {
+
+    std::sort(moves, moves + num_moves, [&](const int &a, const int &b) {
+
+        int a_score = score_move(a);
+        int b_score = score_move(b);
+
+        return a_score > b_score;
+
+        // // Killer move comparison
+        // bool a_is_killer = (a == killerMoves[ply][0]) || (a == killerMoves[ply][1]);
+        // bool b_is_killer = (b == killerMoves[ply][0]) || (b == killerMoves[ply][1]);
+
+        // if (a_is_killer != b_is_killer) {
+        //     return a_is_killer;
+        // }
+
+        // // History heuristic comparison
+        // int a_history = history_table[decode_piece(a)][decode_destination(a)];
+        // int b_history = history_table[decode_piece(b)][decode_destination(b)];
+        
+        // // Sort moves based on the score_move function first, and then killer/history heuristics
+        // if (a_score != b_score) {
+        //     return a_score > b_score;
+        // } else {
+        //     return a_history > b_history;
+        // }
+
+    });
+
+    // /****************************************\
+    //  *             SCORE MOVES
+    // \****************************************/
+    // // do an insertion sort for best-case O(n) time
+    // int scores[moves_list.count];
+    // // compute the scores for each move
+    // for (int i=0; i<moves_list.count; i++) {
+    //     scores[i] = score_move(moves_list.moves[i]);
+    // }
+
+    // /****************************************\
+    //  *             INSERTION SORT
+    // \****************************************/
+    // for (int i=1; i<moves_list.count; i++) {
+    //     int score = scores[i];
+    //     int move = moves_list.moves[i];
+
+    //     int j = i - 1;
+    //     while (j >= 0 && scores[j] < score) {
+    //         scores[j+1] = scores[j];
+    //         moves_list.moves[j+1] = moves_list.moves[j];
+    //         j --;
+    //     }
+    //     scores[j + 1] = score;
+    //     moves_list.moves[j + 1] = move;
+    // }
 }
 
 int Skunk::score_move(int move) {
@@ -1260,23 +1320,19 @@ int Skunk::score_move(int move) {
 
     if (is_capture(move)) {
         score += mvv_lva[piece][victim] + 10000;
-    } else {
+    } 
 
 #ifdef KILLER_HISTORY
-        // score killer move 1
-        if (ply < MAX_PLY && killer_moves[0][ply] == move) {
-            return 9000;
-        }
-        // score killer move 2
-        else if (ply < MAX_PLY && killer_moves[1][ply] == move) {
-            return 8000;
-        }
-
-        // score history move
-        return history_moves[side][decode_source(move)][decode_destination(move)];
-#endif
-
+    // Killer moves
+    if (move == killer_moves[ply][0]) {
+        score += 9000;
+    } else if (move == killer_moves[ply][1]) {
+        score += 8000;
     }
+
+    // History heuristic
+    score += history_table[piece][decode_destination(move)];
+#endif
 
     return score;
 }
@@ -1316,7 +1372,7 @@ int Skunk::quiesence(int alpha, int beta) {
     int check = is_check();
 
     // Calculate the evaluation score
-    int evaluation = evaluate() + static_cast<int>(log(moves_list.count + 1) * 0.5 * MOBILITY_WEIGHT) - (check ? KING_SAFETY_WEIGHT : 0);
+    int evaluation = evaluate();// + static_cast<int>(log(moves_list.count + 1) * 0.5 * MOBILITY_WEIGHT) - (check ? KING_SAFETY_WEIGHT : 0);
 
     // Alpha-beta pruning
     if (evaluation >= beta) {
@@ -1328,9 +1384,10 @@ int Skunk::quiesence(int alpha, int beta) {
     }
 
     // Sort the moves to improve search efficiency
-    sort_moves(moves_list);
+    sort_moves(moves_list.moves, moves_list.count);
 
     int score = INT_MIN;
+
     bool made_capture = false;
 
     for (int i = 0; i < moves_list.count; i++) {
@@ -1341,10 +1398,12 @@ int Skunk::quiesence(int alpha, int beta) {
 
         int victim = get_piece(decode_destination(move));
 
+        #ifdef FUTILITY_PRUNE
         // Futility pruning: skip moves that are unlikely to improve the position
         if (!is_check() && (abs(piece_scores[victim]) + evaluation + piece_scores[Q] * 10) < alpha) {
             return alpha;
         }
+        #endif
 
         // Futility pruning: skip moves that are unlikely to improve the position
         // int futility_margin = 100; // Adjust this value based on your engine's requirements
@@ -1399,16 +1458,16 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     if (force_stop) return 0;
 
-    t_moves moves_list;
-    generate_moves(moves_list);
-    sort_moves(moves_list);
-
     int check = is_check();
 
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
-        return quiesence(alpha, beta);
+            return quiesence(alpha, beta);
     }
+
+    t_moves moves_list;
+    generate_moves(moves_list);
+    sort_moves(moves_list.moves, moves_list.count);
 
     if (moves_list.count == 0) {
         return check ? (-CHECKMATE) + ply : 0;
@@ -1419,8 +1478,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     }
 
     t_line line = {.cmove = 0};
-    int best_score = INT_MIN, best_move = 0, current_move, current_score;
-
+    int best_move = 0, current_move, best_score = (float)INT_MIN, current_score;
     if (check) depth++;
 
 #ifdef TRANSPOSITION_TABLE
@@ -1441,10 +1499,10 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 }
                 return entry->score;
             case HASH_LOWERBOUND:
-                alpha = std::max(alpha, entry->score);
+                alpha = alpha>entry->score?alpha:entry->score;//std::max(alpha, entry->score);
                 break;
             case HASH_UPPERBOUND:
-                beta = std::min(beta, entry->score);
+                beta = beta>entry->score?entry->score:beta;
             default:
                 break;
         }
@@ -1459,31 +1517,48 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
         // Verified null move and other code here...
 #ifdef VERIFIED_NULL_MOVE
-    int fail_high = 0;
-
-    if (!check && (!verify || depth > 1) && do_null == DO_NULL) {
-        // make null move
+    if (!check && (depth > 1 || !verify) && do_null == DO_NULL) {
+        // Save the current board state
         copy_board();
+
+        // Make a null move
         side ^= 1;
         zobrist ^= side_key;
-        if (enpassant != no_square) zobrist ^= enpassant_keys[enpassant];
+
+        if (enpassant != no_square) {
+            zobrist ^= enpassant_keys[enpassant];
+        }
         enpassant = no_square;
-        int null_move = -negamax(-beta, -beta+1, depth - NULL_R, verify, NO_NULL, nullptr);
-        side ^= 1;
+
+        // Increase the ply
+        ply++;
+
+        // Perform a reduced-depth search with the null move
+        int null_move = -negamax(-beta, -beta + 1, depth - NULL_R, verify, NO_NULL, nullptr);
+
+        // Decrease the ply and restore the previous board state
+        ply--;
         restore_board();
 
+        // Check if the null move caused a beta-cutoff
         if (null_move >= beta) {
             if (verify) {
                 verify = 0;
                 depth--;
-                fail_high = 1;
             } else {
+                /*
+                info transpositions 123589 ttp: 0.0772 score cp -103 depth 8 nodes 1600156 q_nodes 1503679 time 2051 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
+                bestmove h4f2
+                */
                 return null_move;
             }
         }
     }
 #endif
-
+    /*
+    info transpositions 94278 ttp: 0.1047 score mate 1073491823 depth 9 nodes 900073 q_nodes 376163 time 2028 pv 
+bestmove e2a6
+*/
     copy_board();
 
     for (int i = 0; i < moves_list.count; i++) {
@@ -1535,14 +1610,19 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             // Update killer moves and history here...
 #ifdef KILLER_HISTORY
             // ADD mask ply check here to avoid segfaults
+            // if (!is_capture(current_move) && ply < MAX_PLY) {
+            //     history_moves[side][decode_source(current_move)][decode_destination(current_move)] += depth*depth;
+            //     killer_moves[1][ply] = killer_moves[0][ply];
+            //     killer_moves[0][ply] = current_move;
+            // }
             if (!is_capture(current_move) && ply < MAX_PLY) {
-                history_moves[side][decode_source(current_move)][decode_destination(current_move)] += depth*depth;
-                killer_moves[1][ply] = killer_moves[0][ply];
-                killer_moves[0][ply] = current_move;
+                update_heuristics(ply, current_move, depth);
             }
 #endif
 
+#ifdef TRANSPOSITION_TABLE
             write_hash_entry(beta, depth, best_move, HASH_LOWERBOUND);
+#endif
             return beta;
         }
     }
@@ -1563,9 +1643,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 // the top level call to get the best move
 int Skunk::search(int maxDepth) {
 
-    memset(killer_moves, 0, sizeof(killer_moves));
-
-    memset(history_moves, 0, sizeof(history_moves));
+    init_heuristics();
 
     // iterate through deepening as we go
     t_line pline = {.cmove = 0};
@@ -1574,7 +1652,7 @@ int Skunk::search(int maxDepth) {
 
     force_stop = 0;
 
-    int score, useable_depth;
+    int score, useable_depth = 0;
     cache_hit = 0;
     q_nodes = 0;
     nodes = 0;
@@ -1588,12 +1666,32 @@ int Skunk::search(int maxDepth) {
 
         test = negamax(alpha, beta, depth, 1, DO_NULL, &pline);
 
-        // only use odd depths, for some reason even depths are slightly weaker
         if (force_stop) break;
 
-        previous_pv_line = pline;
-        score = test;
         useable_depth = depth;
+
+        // print each depth
+        std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
+        if (test < -CHECKMATE + 2000) {
+            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, useable_depth, nodes, q_nodes, elapsed);
+        } else if (test > CHECKMATE - 2000) {
+            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, useable_depth, nodes, q_nodes, elapsed);
+        } else {
+            printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, useable_depth, nodes, q_nodes, elapsed);
+        } 
+
+        for (int i=0; i<previous_pv_line.cmove; i++) {
+            // loop over the moves within a PV line
+            // print PV move
+            print_move(previous_pv_line.argmove[i]);
+            printf(" ");
+        }
+        printf("\n");
+
+        // copy this pline to the previous pline struct so we can use it in next search
+        memcpy(&previous_pv_line, &pline, sizeof(t_line));
+        score = test;
     }
 
     if (UCI_AnalyseMode)
@@ -1628,25 +1726,27 @@ int Skunk::search(int maxDepth) {
 
 
 float Skunk::evaluation_weights[NUM_WEIGHTS] = {
-    1.5f,  // MATERIAL_WEIGHT
+    15.0f,  // MATERIAL_WEIGHT
     1.0f,  // PIECE_SCORE_WEIGHT
-    0.3f,  // DOUBLED_PAWNS_WEIGHT
-    0.3f,  // ISOLATED_PAWNS_WEIGHT
-    0.75f, // PASSED_PAWN_WEIGHT
-    0.7f,  // MOBILITY_WEIGHT
-    0.2f   // KING_SAFETY_WEIGHT
+    3.0f,  // DOUBLED_PAWNS_WEIGHT
+    3.0f,  // ISOLATED_PAWNS_WEIGHT
+    7.5f, // PASSED_PAWN_WEIGHT
+    7.0f,  // MOBILITY_WEIGHT
+    5.0f   // KING_SAFETY_WEIGHT
 };
 
 
-float Skunk::evaluate() {
+int Skunk::evaluate() {
     // material_score is how many total pieces are on the board
-    float material_score = 0;
-    float white_material_score = 0;
-    float black_material_score = 0;
-    float pawn_structure_score = 0;
-    float passed_pawn_score = 0;
-    float mobility_score = 0;
-    float king_safety_score = 0;
+    int material_score = 0;
+    int white_material_score = 0;
+    int black_material_score = 0;
+    int square_occupancy_score = 0;
+    int square_occupancy_score_endgame = 0;
+    int pawn_structure_score = 0;
+    int passed_pawn_score = 0;
+    int mobility_score = 0;
+    int king_safety_score = 0;
     float game_phase;
 
     // get total points on the board to taper endgame
@@ -1661,6 +1761,8 @@ float Skunk::evaluate() {
 
     // Calculate the scores for each aspect of the game
     material_score = calculate_material_score();
+    square_occupancy_score = calculate_square_occupancy_score();
+    square_occupancy_score_endgame = calculate_square_occupancy_score_endgame();
     pawn_structure_score = calculate_pawn_structure_score();
     mobility_score = calculate_mobility_score();
     king_safety_score = calculate_king_safety_score();
@@ -1669,10 +1771,10 @@ float Skunk::evaluate() {
     game_phase = calculate_game_phase(white_material_score + -black_material_score);
 
     // Combine the scores for each aspect, considering the game phase
-    float opening_score = material_score + pawn_structure_score + mobility_score + king_safety_score;
-    float endgame_score = material_score + pawn_structure_score;
+    int opening_score = material_score + pawn_structure_score + mobility_score + king_safety_score + square_occupancy_score;
+    int endgame_score = material_score + pawn_structure_score + square_occupancy_score_endgame;
 
-    float score = opening_score * game_phase + endgame_score * (1.0f - game_phase);
+    int score = opening_score * game_phase + endgame_score * (1.0f - game_phase);
 
     // Return the score based on the side to move
     return (side == white ? score : -score);
@@ -1683,7 +1785,7 @@ float Skunk::calculate_game_phase(int total_material) {
     return (float)total_material / max_material;
 }
 
-float Skunk::calculate_material_score() {
+int Skunk::calculate_material_score() {
     int material_score = 0;
 
     for (int piece = P; piece <= k; piece++) {
@@ -1693,9 +1795,62 @@ float Skunk::calculate_material_score() {
     return material_score;
 }
 
+int Skunk::calculate_square_occupancy_score() {
+    int score = 0;
+    U64 bitboard;
 
-float Skunk::calculate_pawn_structure_score() {
-    float pawn_structure_score = 0;
+    // Iterate through each piece type (P, N, B, R, Q, K) for both colors
+    for (int piece = P; piece <= k; piece++) {
+        bitboard = bitboards[piece];
+
+        // Loop through all instances of the current piece type on the board
+        while (bitboard) {
+            // Get the least significant bit index for the current piece
+            int square = get_ls1b_index(bitboard);
+
+            // Add/subtract the square score based on the piece color (white or black)
+            if (piece >= p)
+                score -= square_scores[piece % 6][mirror_score[square]] * evaluation_weights[PIECE_SCORE_WEIGHT]; // Black piece (lowercase)
+            else
+                score += square_scores[piece % 6][square] * evaluation_weights[PIECE_SCORE_WEIGHT]; // White piece (uppercase)
+
+            // Remove the least significant bit from the bitboard
+            pop_lsb(bitboard);
+        }
+    }
+
+    return score;
+}
+
+int Skunk::calculate_square_occupancy_score_endgame() {
+    int score = 0;
+    U64 bitboard;
+
+    // Iterate through each piece type (P, N, B, R, Q, K) for both colors
+    for (int piece = P; piece <= k; piece++) {
+        bitboard = bitboards[piece];
+
+        // Loop through all instances of the current piece type on the board
+        while (bitboard) {
+            // Get the least significant bit index for the current piece
+            int square = get_ls1b_index(bitboard);
+
+            // Add/subtract the square score based on the piece color (white or black)
+            if (piece >= p)
+                score -= eg_tables[piece % 6][mirror_score[square]] * evaluation_weights[PIECE_SCORE_WEIGHT]; // Black piece (lowercase)
+            else
+                score += eg_tables[piece % 6][square] * evaluation_weights[PIECE_SCORE_WEIGHT]; // White piece (uppercase)
+
+            // Remove the least significant bit from the bitboard
+            pop_lsb(bitboard);
+        }
+    }
+
+    return score;
+}
+
+int Skunk::calculate_pawn_structure_score() {
+    int pawn_structure_score = 0;
     U64 white_pawns = bitboards[P];
     U64 black_pawns = bitboards[p];
 
@@ -1764,8 +1919,8 @@ float Skunk::calculate_pawn_structure_score() {
 }
 
 
-float Skunk::calculate_mobility_score() {
-    float mobility_score = 0;
+int Skunk::calculate_mobility_score() {
+    int mobility_score = 0;
     int pieces[] = {N, R, B, n, r, b};
 
     for (int i = 0; i < 6; i++) {
@@ -1787,8 +1942,8 @@ float Skunk::calculate_mobility_score() {
     return mobility_score;
 }
 
-float Skunk::calculate_king_safety_score() {
-    float king_safety_score = 0;
+int Skunk::calculate_king_safety_score() {
+    int king_safety_score = 0;
 
 
     int king_square_white = get_ls1b_index(bitboards[K]);
@@ -1927,7 +2082,7 @@ void Skunk::parse_go(char *cmd) {
         search(search_depth);
     } else if (wtime > 0 && btime > 0) {
         // calculate movetime inteligently
-        move_time = 2000;
+        move_time = 1000;
         if (side == white) {
             move_time = std::min(DEFAULT_MOVETIME, wtime);
         } else {
@@ -2253,7 +2408,21 @@ void Skunk::print_move_detailed(int move) {
            decode_castle(move)
     );
 }
-
+void Skunk::show_sort() {
+    t_moves moves_list;
+    generate_moves(moves_list);
+    printf("Moves before sort:\n");
+    for (int i=0; i<moves_list.count; i++) {
+        print_move(moves_list.moves[i]);
+        printf("\n");
+    }
+    sort_moves(moves_list.moves, moves_list.count);
+    printf("After sort:\n");
+    for (int i=0; i<moves_list.count; i++) {
+        print_move(moves_list.moves[i]);
+        printf("\n");
+    }
+}
 void Skunk::print_move(int move) {
     int promoted = decode_promoted(move);
     if (promoted) {
