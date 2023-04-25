@@ -15,7 +15,7 @@
 ===============================
 \*****************************/
 
-void Skunk::parse_fen(char *fen) {
+void Skunk::parse_fen(const std::string& fen) {
     // reset board position (bitboards)
     memset(bitboards, 0ULL, sizeof(bitboards));
 
@@ -28,31 +28,35 @@ void Skunk::parse_fen(char *fen) {
     enpassant = no_square;
     castle = 0;
 
+    int square = 0;
+    size_t fen_idx = 0;
+
     // loop over board squares
-    for (int square = 0; square < 64; square++) {
-        if (*fen == '/') {
+    while (square < 64 && fen_idx < fen.length()) {
+        if (fen[fen_idx] == '/') {
             // match rank separator
-            fen++;
-            square --;
-        } else if (*fen >= '0' && *fen <= '9') {
+            fen_idx++;
+            square--;
+        } else if (fen[fen_idx] >= '0' && fen[fen_idx] <= '9') {
             // match empty square numbers within FEN string
-            square += *fen - '1'; // use '1' to offset the loop increment
-            fen++;
+            square += fen[fen_idx] - '1'; // use '1' to offset the loop increment
+            fen_idx++;
         } else {
             // match ascii pieces within FEN string
-            int piece = char_pieces[*fen];
+            int piece = char_pieces[fen[fen_idx]];
             set_bit(bitboards[piece], square);
             piece_count[piece]++;
-            fen++;
+            fen_idx++;
         }
+        square++;
     }
     // parse side to move
-    side = (*(++fen) == 'w') ? white : black;
-    fen += 2;
+    side = (fen[++fen_idx] == 'w') ? white : black;
+    fen_idx += 2;
 
     // parse castling rights
-    while (*fen != ' ') {
-        switch (*fen++) {
+    while (fen[fen_idx] != ' ' && fen_idx < fen.length()) {
+        switch (fen[fen_idx++]) {
             case 'K': castle |= wk; break;
             case 'Q': castle |= wq; break;
             case 'k': castle |= bk; break;
@@ -61,9 +65,9 @@ void Skunk::parse_fen(char *fen) {
     }
 
     // parse enpassant square
-    if (*(++fen) != '-') {
-        int file = *fen++ - 'a';
-        int rank = 8 - (*fen - '1');
+    if (fen[++fen_idx] != '-') {
+        int file = fen[fen_idx++] - 'a';
+        int rank = 8 - (fen[fen_idx] - '1');
         enpassant = rank * 8 + file;
     } else {
         enpassant = no_square;
@@ -83,6 +87,7 @@ void Skunk::parse_fen(char *fen) {
     init();
 
 }
+
 
 
 void Skunk::fill_occupancies() {
@@ -1671,12 +1676,14 @@ int Skunk::search(int maxDepth) {
         // print for each depth
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
+        
         if (score < -CHECKMATE + 2000) {
             printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, depth + 1, nodes, q_nodes, elapsed);
         } else if (score > CHECKMATE - 2000) {
             printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, depth + 1, nodes, q_nodes, elapsed);
         } else {
-            printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, depth + 1, nodes, q_nodes, elapsed);
+            std::cout << "info transpositions " << cache_hit << " score cp " << score << " depth " << depth + 1 << " nodes " << nodes << " time " << time << " pv ";
+            // printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, depth + 1, nodes, q_nodes, elapsed);
         } 
 
         // print pv lines
@@ -1684,8 +1691,7 @@ int Skunk::search(int maxDepth) {
             print_move(previous_pv_line.argmove[i]);
             printf(" ");
         }
-        printf("\n");
-
+        std::cout << std::endl;
         // copy this pline to the previous pline struct so we can use it in next search
         memcpy(&previous_pv_line, &pline, sizeof(t_line));
     }
@@ -2029,7 +2035,7 @@ void Skunk::communicate() {
     fflush(stdin);
 }
 
-void Skunk::parse_go(char *cmd) {
+void Skunk::parse_go(const std::string& cmd) {
     search_depth = 0;
     move_time = 0;
     btime = 0;
@@ -2056,52 +2062,55 @@ void Skunk::parse_go(char *cmd) {
         // Do a depth-limited search
         search(search_depth);
     } else if (wtime > 0 && btime > 0) {
-        // calculate movetime inteligently
+        // calculate movetime intelligently
         move_time = 1000;
         if (side == white) {
             move_time = std::min(DEFAULT_MOVETIME, wtime);
         } else {
             move_time = std::min(DEFAULT_MOVETIME, btime);
         }
+        // printf("%d\n", move_time);
         search(INT_MAX);
     }
 }
 
-void Skunk::parse_position(char *command) {
+
+void Skunk::parse_position(const std::string& command) {
     /*
      * command looks something like "position startpos" or "position fen <fen>"
      */
-    command += 9;
-    char *current_char = command;
-    if (strncmp(command, "startpos", 8) == 0) {
+    std::string cmd = command.substr(9);
+
+    if (cmd.substr(0, 8) == "startpos") {
         parse_fen(fen_start);
     } else {
-        current_char = strstr(command, "fen");
-        if (current_char == NULL) {
-            parse_fen(fen_start);
+        size_t fen_pos = cmd.find("fen");
+        if (fen_pos != std::string::npos) {
+            parse_fen(cmd.substr(fen_pos + 4));
         } else {
-            current_char += 4;
-            parse_fen(current_char);
+            parse_fen(fen_start);
         }
     }
 
-    current_char = strstr(command, "moves");
-
+    size_t moves_pos = cmd.find("moves");
     repitition.count = 0;
-    if (current_char != NULL) {
-        current_char += 6;
-        while (*current_char) {
-            int move = parse_move(current_char);
+
+    if (moves_pos != std::string::npos) {
+        std::string moves_str = cmd.substr(moves_pos + 6);
+        std::stringstream moves_ss(moves_str);
+        std::string move_str;
+
+        while (std::getline(moves_ss, move_str, ' ')) {
+            int move = parse_move(move_str);
 
             if (move == 0) break;
 
             make_move(move, all_moves);
             repitition.table[repitition.count++] = zobrist;
-            while (*current_char && *current_char != ' ') current_char ++;
-            current_char ++;
         }
     }
 }
+
 
 void Skunk::parse_perft(char *command) {
     int depth = 5;
@@ -2109,11 +2118,11 @@ void Skunk::parse_perft(char *command) {
     perft_test(depth);
 }
 
-int Skunk::parse_move(char *move_string) {
+int Skunk::parse_move(const std::string& move_string) {
     t_moves moves;
     generate_moves(moves);
 
-    if (strlen(move_string) < 4) return 0;
+    if (move_string.length() < 4) return 0;
 
     int source = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8;
     int target = (move_string[2] - 'a') + (8 - (move_string[3] - '0')) * 8;
@@ -2135,6 +2144,7 @@ int Skunk::parse_move(char *move_string) {
     }
     return 0;
 }
+
 
 perft perft_results;
 

@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <vector>
 #include "board.h"
+#include <sstream>
 
 using namespace std;
 
@@ -15,154 +16,92 @@ typedef struct {
 
 void uci_loop();
 
-void parse_command(char * command, Skunk *skunk);
+void parse_command(const std::string& cmd, Skunk* skunk);
 
-t_commands split_command(char *command, char * seperator);
+std::vector<std::string> split_command(const std::string& input);
 
 int main(int argc, char **argv) {
-//    automate_tests();
     uci_loop();
-//    Skunk *skunk = new Skunk();
-//    skunk->parse_fen("r1bqkb1r/ppp2ppp/4pn2/3n3Q/3P4/2PB4/PP3PPP/RNB1K1NR w KQkq - 3 7");
-//    skunk->search(8);
-//    skunk->print_board();
-//    printf("%d\n", skunk->evaluate());
-//    int eval = skunk->evaluate();
-//    skunk->print_board();
-//    printf("Eval is %d\n", eval);
-//    t_moves moves_list;
-//    skunk->generate_moves(moves_list);
-//    skunk->sort_moves(moves_list);
-//    skunk->print_moves(moves_list);
-//    skunk->enpassant = g3;
-//    t_moves moves;
-//    skunk->generate_moves(moves);
-//    skunk->print_moves(moves);
-
-
-//    U64 board = 0ULL;
-//    Skunk *skunk = new Skunk();
-//    for (int i=0; i<64; i++) {
-//        set_bit(board, i);
-//    }
-//    skunk->print_bitboard(board);
     return 0;
 }
 
 
-// void automate_tests() {
-//     std::vector<char *> tests;
-//     tests.push_back((char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-
-//     Skunk *skunk = new Skunk();
-
-//     for (int test=0; test<tests.size(); test++) {
-//         // this will test the fen position for x couple of seconds
-//         skunk->parse_fen(tests.at(test));
-//         skunk->parse_go((char *)"go movetime 1000");
-//     }
-// }
-
-
 void uci_loop() {
-    setbuf(stdin, NULL);
-    setbuf(stdout, NULL);
-    char input[200];
-
     Skunk *skunk = new Skunk();
+    std::string input;
 
-    int stop = 0;
-    while (!stop) {
+    while (true) {
+        std::getline(std::cin, input);
 
-        memset(input, 0, sizeof(input));
-
-        fflush(stdout);
-
-        if (!fgets(input, 2000, stdin) || input[0]=='\n')
+        if (input.empty()) {
             continue;
-        // split the command here
-        t_commands commands = split_command(input, (char *)"\n\r");
-        for (int i=0; i<commands.count; i++) {
-            if  (strlen(commands.command[i]) > 3 && strncmp(commands.command[i], "quit", 4)==0) {
-                stop = 1;
+        }
+
+        std::vector<std::string> commands = split_command(input);
+
+        bool shouldStop = false;
+        for (const std::string& command : commands) {
+            if (command.substr(0, 4) == "quit") {
+                shouldStop = true;
+                break;
             }
-            parse_command(commands.command[i], skunk);
+            parse_command(command, skunk);
+        }
+
+        if (shouldStop) {
+            break;
         }
     }
+
     delete skunk;
 }
 
-t_commands split_command(char *command, char *seperator) {
-    t_commands result = {.count = 0};
-
-    result.command[result.count] = strtok(command, seperator);
-
-    while (result.command[result.count] != NULL)
-    {
-        result.count ++ ;
-        result.command[result.count] = strtok(NULL, seperator);
+std::vector<std::string> split_command(const std::string& input) {
+    std::stringstream ss(input);
+    std::string item;
+    std::vector<std::string> tokens;
+    while (std::getline(ss, item, '\n')) {
+        tokens.push_back(item);
     }
-
-    return result;
+    return tokens;
 }
 
-void parse_command(char *cmd, Skunk *skunk) {
-    if (strcmp(cmd, "uci") == 0) {
+void parse_command(const std::string& cmd, Skunk* skunk) {
+    if (cmd == "uci") {
         // Respond to the "uci" command by printing the engine name and options
-        printf("id name Skunk\n");
-        printf("id author Jeremy Colegrove\n");
-        printf("uciok\n");
-    } else if (strcmp(cmd, "isready") == 0) {
+        std::cout << "id name Skunk" << std::endl;
+        std::cout << "id author Jeremy Colegrove" << std::endl;
+        std::cout << "uciok" << std::endl;
+    } else if (cmd == "isready") {
         // Respond to the "isready" command by indicating that the engine is ready
-        printf("readyok\n");
-    } else if (strncmp(cmd, "setoption", 9) == 0) {
+        std::cout << "readyok" << std::endl;
+    } else if (cmd.substr(0, 9) == "setoption") {
         // Parse and process any options sent with the "setoption" command
         // ...
-    } else if (strncmp(cmd, "position", 8) == 0) {
+    } else if (cmd.substr(0, 8) == "position") {
         // Parse and set the position on the board sent with the "position" command
         skunk->parse_position(cmd);
-    } else if (strncmp(cmd, "go", 2) == 0) {
+    } else if (cmd.substr(0, 2) == "go") {
         // Parse and set the search parameters sent with the "go" command
         // ...
         // Start the search and print the best move when it is finished
         skunk->parse_go(cmd);
-    } else if (strncmp(cmd, "ucinewgame", 10)==0) {
+    } else if (cmd.substr(0, 10) == "ucinewgame") {
         skunk->parse_position("position startpos");
-    }else if (strcmp(cmd, "stop") == 0) {
+    } else if (cmd == "stop") {
         // Stop the search in response to the "stop" command
         // ...
-    } else if (strcmp(cmd, "quit") == 0) {
+    } else if (cmd == "quit") {
         // Exit the program in response to the "quit" command
         exit(0);
-    } else if (strncmp(cmd, "perft", 5)==0) {
-        skunk->parse_perft(cmd);
-    } else if (strcmp(cmd, "board")==0) {
+    } else if (cmd.substr(0, 5) == "perft") {
+        // skunk->parse_perft(cmd);
+    } else if (cmd == "board") {
         skunk->print_board();
-    } else if (strcmp(cmd, "score")==0) {
-        printf("%f\n", skunk->evaluate());
-    } else if (strcmp(cmd, "sort")==0) {
-        skunk -> show_sort();
+    } else if (cmd == "score") {
+        std::cout << skunk->evaluate() << std::endl;
+    } else if (cmd == "sort") {
+        skunk->show_sort();
     }
-//    if (strncmp(input, "isready", 7)==0) {
-//        printf("readyok\n");
-//    } else if (strncmp(input, "position", 8)==0) {
-//        skunk->parse_position(input);
-//    } else if (strncmp(input, "ucinewgame", 10)==0) {
-//        skunk->parse_position("position startpos");
-//    } else if (strncmp(input, "go", 2)==0) {
-//        skunk->parse_go(input);
-//    } else if (strncmp(input, "uci", 3)==0) {
-//        printf("id name Complex3\n"
-//               "id author Jeremy Colegrove\n"
-//               "option name UCI_AnalyseMode type spin default true\n"
-//               "option name UCI_DefaultDepth type spin default 7\n"
-//               "option name UCI_DefaultDuration type spin default 2000\n"
-//               "uciok\n");
-//    } else if (strncmp(input, "setoption", 9)==0) {
-//        skunk->parse_option(input);
-//    } else if (strncmp(input, "debug", 5)==0) {
-//        skunk->parse_debug(input);
-//    } else if (strncmp(input, "perft", 5)==0) {
-//        skunk->parse_perft(input);
-//    }
 }
+

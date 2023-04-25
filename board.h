@@ -51,7 +51,7 @@ info transpositions 77515 ttp: 0.0574 score cp -103 depth 8 nodes 1350171 q_node
 bestmove h4f2
 */
 // flag for killer and history move orderings
-#define KILLER_HISTORY
+// #define KILLER_HISTORY
 /*
 with:
 info transpositions 245891 ttp: 0.0609 score mate 5 depth 9 nodes 4039027 q_nodes 3955721 time 5553 pv h4f4 e3d3 h2h3 d3e2 f4f3 e2d2 f3f2 c3e2 b8f4 d2e1 h3h1 e1f1 h3h1 d5d6 
@@ -520,7 +520,7 @@ public:
     Skunk();
     ~Skunk();
 
-    void parse_fen(char *fen);
+    void parse_fen(const std::string& fen);
     void print_bitboard(U64 board);
     void print_board();
     void print_attacks(int side);
@@ -641,9 +641,9 @@ public:
 
     // UCI commands/helper functions
     void communicate();
-    int parse_move(char *move_string);
-    void parse_position(char *command);
-    void parse_go(char *command);
+    int parse_move(const std::string& move_string);
+    void parse_position(const std::string& command);
+    void parse_go(const std::string& cmd);
     void parse_option(char *command);
     void parse_debug(char *command);
     void parse_perft(char *command);
