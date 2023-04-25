@@ -100,7 +100,7 @@ bestmove b8f4
 #define HASH_EXACT 0
 #define HASH_LOWERBOUND 1
 #define HASH_UPPERBOUND 2
-#define DEFAULT_MOVETIME 10000 // how many ms to search for
+#define DEFAULT_MOVETIME 2500 // how many ms to search for
 
 
 
@@ -646,7 +646,7 @@ public:
     void parse_go(const std::string& cmd);
     void parse_option(char *command);
     void parse_debug(char *command);
-    void parse_perft(char *command);
+    void parse_perft(const std::string& move_string);
 
     char *fen_start = (char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;

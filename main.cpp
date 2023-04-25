@@ -95,7 +95,7 @@ void parse_command(const std::string& cmd, Skunk* skunk) {
         // Exit the program in response to the "quit" command
         exit(0);
     } else if (cmd.substr(0, 5) == "perft") {
-        // skunk->parse_perft(cmd);
+        skunk->parse_perft(cmd);
     } else if (cmd == "board") {
         skunk->print_board();
     } else if (cmd == "score") {

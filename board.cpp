@@ -1404,17 +1404,18 @@ int Skunk::quiesence(int alpha, int beta) {
         int victim = get_piece(decode_destination(move));
 
         #ifdef FUTILITY_PRUNE
+        // // Futility pruning: skip moves that are unlikely to improve the position
+        // if (!is_check() && (abs(piece_scores[victim]) + evaluation + piece_scores[Q] * 10) < alpha) {
+        //     return alpha;
+        // }
         // Futility pruning: skip moves that are unlikely to improve the position
-        if (!is_check() && (abs(piece_scores[victim]) + evaluation + piece_scores[Q] * 10) < alpha) {
-            return alpha;
+        int futility_margin = 100; // Adjust this value based on your engine's requirements
+        if (!is_check() && (evaluation + piece_scores[victim] + futility_margin <= alpha)) {
+            continue;
         }
         #endif
 
-        // Futility pruning: skip moves that are unlikely to improve the position
-        // int futility_margin = 100; // Adjust this value based on your engine's requirements
-        // if (!is_check() && (evaluation + piece_scores[victim] + futility_margin <= alpha)) {
-        //     continue;
-        // }
+        
 
         // Keep track of whether a capture move was made
         made_capture = true;
@@ -1479,7 +1480,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     }
 
     if (ply && is_repetition()) {
-        return -evaluate() * 0.25;
+        return 0;
     }
 
     t_line line = {.cmove = 0};
@@ -1669,7 +1670,7 @@ int Skunk::search(int maxDepth) {
         ply = 0;
         pline.cmove = 0;
 
-        score = negamax(alpha, beta, depth, 1, DO_NULL, &pline);
+        score = negamax(alpha, beta, depth + 1, 1, DO_NULL, &pline);
 
         if (force_stop) break;
 
@@ -1682,18 +1683,19 @@ int Skunk::search(int maxDepth) {
         } else if (score > CHECKMATE - 2000) {
             printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, depth + 1, nodes, q_nodes, elapsed);
         } else {
-            std::cout << "info transpositions " << cache_hit << " score cp " << score << " depth " << depth + 1 << " nodes " << nodes << " time " << time << " pv ";
-            // printf("info transpositions %d ttp: %.4f score cp %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, score, depth + 1, nodes, q_nodes, elapsed);
+            std::cout << "info transpositions " << cache_hit << " score cp " << score << " depth " << depth + 1 << " nodes " << nodes << " time " << elapsed << " pv ";
         } 
-
+        // copy this pline to the previous pline struct so we can use it in next search
+        memcpy(&previous_pv_line, &pline, sizeof(t_line));
+        // previous_pv_line = pline;
         // print pv lines
+
         for (int i=0; i<previous_pv_line.cmove; i++) {
             print_move(previous_pv_line.argmove[i]);
             printf(" ");
         }
         std::cout << std::endl;
-        // copy this pline to the previous pline struct so we can use it in next search
-        memcpy(&previous_pv_line, &pline, sizeof(t_line));
+
     }
 
 
@@ -1709,10 +1711,10 @@ int Skunk::search(int maxDepth) {
 float Skunk::evaluation_weights[NUM_WEIGHTS] = {
     15.0f,  // MATERIAL_WEIGHT
     1.0f,  // PIECE_SCORE_WEIGHT
-    3.0f,  // DOUBLED_PAWNS_WEIGHT
-    3.0f,  // ISOLATED_PAWNS_WEIGHT
-    7.5f, // PASSED_PAWN_WEIGHT
-    7.0f,  // MOBILITY_WEIGHT
+    4.0f,  // DOUBLED_PAWNS_WEIGHT
+    4.0f,  // ISOLATED_PAWNS_WEIGHT
+    10.0f, // PASSED_PAWN_WEIGHT
+    6.0f,  // MOBILITY_WEIGHT
     5.0f   // KING_SAFETY_WEIGHT
 };
 
@@ -2064,11 +2066,13 @@ void Skunk::parse_go(const std::string& cmd) {
     } else if (wtime > 0 && btime > 0) {
         // calculate movetime intelligently
         move_time = 1000;
+
         if (side == white) {
             move_time = std::min(DEFAULT_MOVETIME, wtime);
         } else {
             move_time = std::min(DEFAULT_MOVETIME, btime);
         }
+        
         // printf("%d\n", move_time);
         search(INT_MAX);
     }
@@ -2112,11 +2116,7 @@ void Skunk::parse_position(const std::string& command) {
 }
 
 
-void Skunk::parse_perft(char *command) {
-    int depth = 5;
-    depth = atoi(command + 6);
-    perft_test(depth);
-}
+
 
 int Skunk::parse_move(const std::string& move_string) {
     t_moves moves;
@@ -2148,6 +2148,13 @@ int Skunk::parse_move(const std::string& move_string) {
 
 perft perft_results;
 
+void Skunk::parse_perft(const std::string& command) {
+    int depth = 5;
+    std::string depth_str = command.substr(6); // Extract the depth substring
+    depth = std::stoi(depth_str); // Convert the depth substring to an integer
+    perft_test(depth);
+}
+
 void Skunk::perft_test(int depth) {
     printf("Starting PERFT test...\n");
     memset(&perft_results, 0, sizeof(perft));
@@ -2175,7 +2182,7 @@ void Skunk::perft_test(int depth) {
                perft_results.castles[i+1],
                perft_results.promotions[i+1]);
     }
-    printf("Nodes: %lld\nSeconds: %f\nNPS: %d\n", perft_results.total_nodes, (float)elapsed/1000, per_second*1000);
+    printf("Nodes: %lld\nTime: %d\nNPS: %d\n", perft_results.total_nodes, elapsed, per_second*1000);
 }
 
 
