@@ -203,7 +203,7 @@ U64 Skunk::generate_zobrist() {
     for (int piece = P; piece <=k; piece ++) {
         bitboard = bitboards[piece];
         while (bitboard) {
-            int square = get_ls1b_index(bitboard);
+            int square = __builtin_ctzll(bitboard);
             hash ^= piece_keys[piece][square];
             pop_bit(bitboard, square);
         }
@@ -252,7 +252,7 @@ void Skunk::construct_file_masks() {
     for (int square = 0; square < 64; square++) {
         mask = 0ULL;
         for (int row = 0; row < 8; row++) {
-            set_bit(mask, row * 8 + (square % 8));
+            set_bit(mask, row * 8 + (square & 7));
         }
         file_masks[MIDDLE][square] = mask;
     }
@@ -260,9 +260,9 @@ void Skunk::construct_file_masks() {
     // left
     for (int square = 0; square < 64; square++) {
         mask = 0ULL;
-        if (square % 8 == 0) continue;
+        if (square & 7 == 0) continue;
         for (int row = 0; row < 8; row++) {
-            set_bit(mask, row * 8 + ((square-1) % 8));
+            set_bit(mask, row * 8 + ((square-1) & 7));
         }
         file_masks[LEFT][square] = mask;
     }
@@ -270,9 +270,9 @@ void Skunk::construct_file_masks() {
     // right
     for (int square = 0; square < 64; square++) {
         mask = 0ULL;
-        if (square % 8 == 7) continue;
+        if (square & 7 == 7) continue;
         for (int row = 0; row < 8; row++) {
-            set_bit(mask, row * 8 + ((square+1) % 8));
+            set_bit(mask, row * 8 + ((square+1) & 7));
         }
         file_masks[RIGHT][square] = mask;
     }
@@ -284,29 +284,29 @@ void Skunk::construct_direction_rays() {
 
     for (int i=0; i<64; i++) {
         // right
-        nearest_square[DE][i] = i + (7 - i % 8);
+        nearest_square[DE][i] = i + (7 - (i & 7));
 
         // up
-        nearest_square[DN][i] = i % 8;
+        nearest_square[DN][i] = i & 7;
 
         // left
-        nearest_square[DW][i] = i - i % 8;
+        nearest_square[DW][i] = i - (i & 7);
 
         // down
-        nearest_square[DS][i] = 56 + i % 8;
+        nearest_square[DS][i] = 56 + (i & 7);
 
 
         // upper right
-        nearest_square[DNE][i] = i - std::min(i / 8, 7 - i % 8) * 7;
+        nearest_square[DNE][i] = i - std::min(i >> 3, 7 - (i & 7)) * 7;
 
         // lower right
-        nearest_square[DSE][i] = i + std::min(7 - i / 8, 7 - i % 8) * 9;
+        nearest_square[DSE][i] = i + std::min(7 - (i >> 3), 7 - (i & 7)) * 9;
 
         // lower left
-        nearest_square[DSW][i] = i + std::min(7 - i / 8, i % 8) * 7;
+        nearest_square[DSW][i] = i + std::min(7 - (i >> 3), (i & 7)) * 7;
 
         // upper left
-        nearest_square[DNW][i] = i - std::min(i / 8, i % 8) * 9;
+        nearest_square[DNW][i] = i - std::min(i >> 3, (i & 7)) * 9;
     }
 
 
@@ -319,7 +319,7 @@ void Skunk::construct_rays() {
     U64 ray = 0ULL;
     for (int i=0; i<64; i++) {
         // horizontal
-        int left_square = (i / 8)*8;
+        int left_square = (i >> 3)*8;
         for (int j=left_square; j<i; j++) {
             ray = 0ULL;
             int square = j;
@@ -332,7 +332,7 @@ void Skunk::construct_rays() {
         }
 
         // vertical
-        int top_square = i % 8;
+        int top_square = i & 7;
         for (int j=top_square; j<i; j+=8) {
             ray = 0ULL;
             int square = j;
@@ -345,7 +345,7 @@ void Skunk::construct_rays() {
         }
 
         // diagonal se->nw
-        int l_diag = std::min(i % 8, i / 8);
+        int l_diag = std::min(i & 7, i >> 3);
         for (int j = 1; j <= l_diag; j++ ) {
             ray = 0ULL;
             int square = i - 9 * (j-1);
@@ -358,7 +358,7 @@ void Skunk::construct_rays() {
         }
 
         // diagonal sw->ne
-        int r_diag = std::min(7 - (i % 8), i / 8);
+        int r_diag = std::min(7 - (i & 7), i >> 3);
         for (int j = 1; j <= r_diag; j++ ) {
             ray = 0ULL;
             int square = i - 7 * (j-1);
@@ -476,8 +476,8 @@ void Skunk::construct_bishop_tables() {
     for (int square=0; square<64; square++) {
         U64 attacks = 0UL;
 
-        int tr = square / 8;
-        int tf = square % 8;
+        int tr = square >> 3;
+        int tf = square & 7;
         for (int r=tr+1, f=tf+1; r<=6 && f<=6; r++, f++) set_bit(attacks, r*8+f);
         for (int r=tr-1, f=tf+1; r>=1 && f<=6; r--, f++) set_bit(attacks, r*8+f);
         for (int r=tr+1, f=tf-1; r<=6 && f>=1; r++, f--) set_bit(attacks, r*8+f);
@@ -492,8 +492,8 @@ void Skunk::construct_rook_tables() {
     for (int square=0; square<64; square++) {
         U64 attacks = 0UL;
 
-        int tr = square % 8;
-        int tf = square / 8;
+        int tr = square & 7;
+        int tf = square >> 3;
         for (int f=tf-1; f>=1; f--) set_bit(attacks, f*8+tr);
         for (int f=tf+1; f<=6; f++) set_bit(attacks, f*8+tr);
         for (int r=tr+1; r<=6; r++) set_bit(attacks, tf*8+r);
@@ -506,8 +506,8 @@ void Skunk::construct_rook_tables() {
 U64 Skunk::construct_bishop_attacks(int square, unsigned long long int blockers) {
     U64 moves = 0UL;
 
-    int tr = square / 8;
-    int tf = square % 8;
+    int tr = square >> 3;
+    int tf = square & 7;
     for (int r=tr+1, f=tf+1; r<=7 && f<=7; r++, f++) {
         set_bit(moves, r*8+f);
         if (get_bit(blockers, r*8+f)) break;
@@ -533,8 +533,8 @@ U64 Skunk::construct_rook_attacks(int square, U64 blockers) {
     //Generate the kings tables
     U64 attacks = 0UL;
 
-    int tr = square % 8;
-    int tf = square / 8;
+    int tr = square & 7;
+    int tf = square >> 3;
     for (int f=tf-1; f>=0; f--) {
         set_bit(attacks, f*8+tr);
         if (get_bit(blockers, f*8+tr)) break;
@@ -665,7 +665,7 @@ int Skunk::is_square_attacked(int square, int side)
 void Skunk::print_bitboard(U64 board) {
     for (int i=0; i<64; i++)
     {
-        if (i % 8 == 0) {
+        if ((i & 7) == 0) {
             std::cout << std::endl;
             std::cout << 8-(i/8) << "\t\t";
         }
@@ -680,7 +680,7 @@ void Skunk::print_bitboard(U64 board) {
 void Skunk::print_attacks(int side) {
     for (int i=0; i<64; i++)
     {
-        if (i % 8 == 0) {
+        if ((i & 7) == 0) {
             std::cout << std::endl;
             std::cout << 8-(i/8) << "\t\t";
         }
@@ -753,20 +753,20 @@ int Skunk::bit_count(U64 board) {
     return count;
 }
 
-int Skunk::get_ls1b_index(U64 board) {
-    if (board == 0) return -1;
-    unsigned int folded;
-    folded  = (int)((board ^ (board-1)) >> 32);
-    folded ^= (int)( board ^ (board-1)); // lea
-    return lsb_64_table[folded * 0x78291ACF >> 26];
-}
+// int Skunk::get_ls1b_index(U64 board) {
+//     if (board == 0) return -1;
+//     unsigned int folded;
+//     folded  = (int)((board ^ (board-1)) >> 32);
+//     folded ^= (int)( board ^ (board-1)); // lea
+//     return lsb_64_table[folded * 0x78291ACF >> 26];
+// }
 
 U64 Skunk::set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
     U64 occupancy = 0ULL;
 
     for (int i=0; i<bits_in_mask; i++)
     {
-        int square = get_ls1b_index(attack_mask);
+        int square = __builtin_ctzll(attack_mask);
         pop_bit(attack_mask, square);
         if (index & (1ULL << i))
         {
@@ -793,21 +793,21 @@ U64 Skunk::get_slider_attacks() {
 
     pieces = bitboards[bishop];
     while (pieces) {
-        sliders |= get_bishop_attacks(get_ls1b_index(pieces), occupancies[both]);
+        sliders |= get_bishop_attacks(__builtin_ctzll(pieces), occupancies[both]);
         pop_lsb(pieces);
     }
 
     pieces = bitboards[rook];
     while (pieces) {
-        sliders |= get_rook_attacks(get_ls1b_index(pieces), occupancies[both]);
+        sliders |= get_rook_attacks(__builtin_ctzll(pieces), occupancies[both]);
         pop_lsb(pieces);
     }
 
     // calculate queen attacks
     pieces = bitboards[queen];
     while (pieces) {
-        sliders |= get_rook_attacks(get_ls1b_index(pieces), occupancies[both]);
-        sliders |= get_bishop_attacks(get_ls1b_index(pieces), occupancies[both]);
+        sliders |= get_rook_attacks(__builtin_ctzll(pieces), occupancies[both]);
+        sliders |= get_bishop_attacks(__builtin_ctzll(pieces), occupancies[both]);
         pop_lsb(pieces);
     }
 
@@ -825,21 +825,21 @@ U64 Skunk::get_jumper_attacks() {
     // calculate white pawn attacks
     pieces = bitboards[pawn];
     while (pieces) {
-        jumpers |= pawn_masks[side^1][get_ls1b_index(pieces)];
+        jumpers |= pawn_masks[side^1][__builtin_ctzll(pieces)];
         pop_lsb(pieces);
     }
 
     // calculate knight attacks
     pieces = bitboards[knight];
     while (pieces) {
-        jumpers |= knight_masks[get_ls1b_index(pieces)];
+        jumpers |= knight_masks[__builtin_ctzll(pieces)];
         pop_lsb(pieces);
     }
 
     //calculate king attacks
     pieces = bitboards[king];
     while (pieces) {
-        jumpers |= king_masks[get_ls1b_index(pieces)];
+        jumpers |= king_masks[__builtin_ctzll(pieces)];
         pop_lsb(pieces);
     }
     return jumpers;
@@ -878,7 +878,7 @@ void Skunk::generate_moves(t_moves &moves_list)
     // make sure there are no pieces of same color, and the opponent is not attacking the square
     // the attacked_squares for the king is a little bit more complicated. We must remove the king from the board, then generate enemy_attacks
 
-    int king_square = get_ls1b_index(bitboards[king]);
+    int king_square = __builtin_ctzll(bitboards[king]);
 
     pop_bit(occupancies[both], king_square);
     attack_sliders = get_slider_attacks();
@@ -886,12 +886,12 @@ void Skunk::generate_moves(t_moves &moves_list)
     attacked_squares = attack_jumpers | attack_sliders;
     set_bit(occupancies[both], king_square);
 
-    pieces = king_masks[get_ls1b_index(bitboards[king])] & ~occupancies[side] & ~attacked_squares;
+    pieces = king_masks[__builtin_ctzll(bitboards[king])] & ~occupancies[side] & ~attacked_squares;
     // get all of the destinations for the king
     while (pieces) {
-        square = get_ls1b_index(pieces);
+        square = __builtin_ctzll(pieces);
         // encode the move
-        moves_list.moves[moves_list.count++] = encode_move(get_ls1b_index(bitboards[king]), square, king, 0, 0, 0);
+        moves_list.moves[moves_list.count++] = encode_move(__builtin_ctzll(bitboards[king]), square, king, 0, 0, 0);
         pop_lsb(pieces);
     }
 
@@ -920,7 +920,7 @@ void Skunk::generate_moves(t_moves &moves_list)
     // here we have our slider pieces, we can use these to fill our push mask before adding other pieces
     U64 sliders = capture_mask;
     while (sliders) {
-        square = get_ls1b_index(sliders);
+        square = __builtin_ctzll(sliders);
         push_mask |= rays[square][king_square];
         pop_lsb(sliders);
     }
@@ -939,7 +939,7 @@ void Skunk::generate_moves(t_moves &moves_list)
 
         // the capture mask contains how many pieces are checking the king.
         // //If more than one piece, the only valid moves are king moves. We can escape early here.
-        int bit = get_ls1b_index(capture_mask);
+        int bit = __builtin_ctzll(capture_mask);
         pop_lsb(capture_mask);
         if (capture_mask > 0) {
             return;
@@ -972,7 +972,7 @@ void Skunk::generate_moves(t_moves &moves_list)
 
             pieces = opponent_bitboards[pinner_piece];
             while (pieces) {
-                enemy_square = get_ls1b_index(pieces);
+                enemy_square = __builtin_ctzll(pieces);
                 pop_lsb(pieces);
 
                 // which type of piece is it? Shoot, we need to know this to generate its attacks
@@ -984,7 +984,7 @@ void Skunk::generate_moves(t_moves &moves_list)
                 }
 
                 // get the square that the pinned piece is on
-                pinned_square = get_ls1b_index(intersection);
+                pinned_square = __builtin_ctzll(intersection);
                 // get the piece type on that square
                 piece = get_piece(pinned_square);
 
@@ -994,7 +994,7 @@ void Skunk::generate_moves(t_moves &moves_list)
 
 //              go through each valid attack and add it to the list of moves
                 while (attacks) {
-                    destination = get_ls1b_index(attacks);
+                    destination = __builtin_ctzll(attacks);
                     moves_list.moves[moves_list.count++] = encode_move(pinned_square, destination, piece, 0, 0, 0);
                     pop_lsb(attacks);
                 }
@@ -1020,7 +1020,7 @@ void Skunk::generate_moves(t_moves &moves_list)
 
     pieces = unpinned_pieces[pawn];
     while (pieces) {
-        square = get_ls1b_index(pieces);
+        square = __builtin_ctzll(pieces);
         // get this persons attacks
 
         attacks = get_attacks(pawn, square, side) & (filtered_capture_mask | filtered_push_mask);
@@ -1029,7 +1029,7 @@ void Skunk::generate_moves(t_moves &moves_list)
 
         // filter out pawn promotions
         while (filtered) {
-            int destination = get_ls1b_index(filtered);
+            int destination = __builtin_ctzll(filtered);
             if (destination == enpassant) {
                 // remove both pawns from the board, check for check
                 int victim = enpassant + 8*(side==white?1:-1);
@@ -1050,7 +1050,7 @@ void Skunk::generate_moves(t_moves &moves_list)
                 U64 sliders = 0ULL;
 
                 while (horizontal_attackers) {
-                    int horizontal_attacker_square = get_ls1b_index(horizontal_attackers);
+                    int horizontal_attacker_square = __builtin_ctzll(horizontal_attackers);
                     sliders |= get_rook_attacks(horizontal_attacker_square, occupancies[both]);
                     pop_lsb(horizontal_attackers);
                 }
@@ -1070,7 +1070,7 @@ void Skunk::generate_moves(t_moves &moves_list)
         // get pawn pushes/captures onto the 8th rank
         filtered = attacks & (row8 | row1);
         while (filtered) {
-            int destination = get_ls1b_index(filtered);
+            int destination = __builtin_ctzll(filtered);
             moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, rook, 0, 0);
             moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, bishop, 0, 0);
             moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, queen, 0, 0);
@@ -1088,10 +1088,10 @@ void Skunk::generate_moves(t_moves &moves_list)
         pieces = unpinned_pieces[piece];
 
         while (pieces) {
-            square = get_ls1b_index(pieces);
+            square = __builtin_ctzll(pieces);
             attacks = get_attacks(piece, square, side) & (capture_mask | push_mask);
             while (attacks) {
-                destination = get_ls1b_index(attacks);
+                destination = __builtin_ctzll(attacks);
 
                 moves_list.moves[moves_list.count++] = encode_move(square, destination, piece, 0, 0, 0);
                 pop_lsb(attacks);
@@ -1343,7 +1343,7 @@ int Skunk::score_move(int move) {
 }
 
 int Skunk::is_check() {
-    return is_square_attacked(get_ls1b_index(bitboards[side==white?K:k]), side^1);
+    return is_square_attacked(__builtin_ctzll(bitboards[side==white?K:k]), side^1);
 }
 
 void Skunk::write_hash_entry(int score, int depth, int move, int flag) const {
@@ -1789,7 +1789,7 @@ int Skunk::calculate_square_occupancy_score() {
         // Loop through all instances of the current piece type on the board
         while (bitboard) {
             // Get the least significant bit index for the current piece
-            int square = get_ls1b_index(bitboard);
+            int square = __builtin_ctzll(bitboard);
 
             // Add/subtract the square score based on the piece color (white or black)
             if (piece >= p)
@@ -1816,7 +1816,7 @@ int Skunk::calculate_square_occupancy_score_endgame() {
         // Loop through all instances of the current piece type on the board
         while (bitboard) {
             // Get the least significant bit index for the current piece
-            int square = get_ls1b_index(bitboard);
+            int square = __builtin_ctzll(bitboard);
 
             // Add/subtract the square score based on the piece color (white or black)
             if (piece >= p)
@@ -1872,7 +1872,7 @@ int Skunk::calculate_pawn_structure_score() {
     
     U64 pawns = white_pawns;
     while (pawns > 0) {
-        int square = get_ls1b_index(pawns);
+        int square = __builtin_ctzll(pawns);
 
         // get the attacks for this pawn and and it with black pawns to get if it is a passed pawn
         if ((pawn_attack_span_masks[white][square] & black_pawns) == 0) {
@@ -1883,7 +1883,7 @@ int Skunk::calculate_pawn_structure_score() {
 
     pawns = black_pawns;
      while (pawns > 0) {
-        int square = get_ls1b_index(pawns);
+        int square = __builtin_ctzll(pawns);
 
         // get the attacks for this pawn and and it with black pawns to get if it is a passed pawn
         if ((pawn_attack_span_masks[black][square] & white_pawns) == 0) {
@@ -1910,7 +1910,7 @@ int Skunk::calculate_mobility_score() {
         int piece = pieces[i];
         U64 bitboard = bitboards[piece];
         while (bitboard) {
-            int square = get_ls1b_index(bitboard);
+            int square = __builtin_ctzll(bitboard);
 
             // Get this piece's moves
             if (piece >= n) {
@@ -1929,19 +1929,19 @@ int Skunk::calculate_king_safety_score() {
     int king_safety_score = 0;
 
 
-    int king_square_white = get_ls1b_index(bitboards[K]);
-    int king_square_black = get_ls1b_index(bitboards[k]);
+    int king_square_white = __builtin_ctzll(bitboards[K]);
+    int king_square_black = __builtin_ctzll(bitboards[k]);
 
     // White king safety
     int white_king_distance = 0;
     for (int piece = p; piece < k; piece++) {
         U64 bitboard = bitboards[piece];
         while (bitboard) {
-            int square = get_ls1b_index(bitboard);
-            int row_attacker = square / 8;
-            int column_attacker = square % 8;
-            int row_king = king_square_white / 8;
-            int column_king = king_square_white % 8;
+            int square = __builtin_ctzll(bitboard);
+            int row_attacker = square >> 3;
+            int column_attacker = square & 7;
+            int row_king = king_square_white >> 3;
+            int column_king = king_square_white & 7;
 
             int distance = 16 - (abs(row_king - row_attacker) + abs(column_king - column_attacker));
             white_king_distance -= distance * king_distance_heuristic[piece % 6];
@@ -1957,11 +1957,11 @@ int Skunk::calculate_king_safety_score() {
     for (int piece = P; piece < K; piece++) {
         U64 bitboard = bitboards[piece];
         while (bitboard) {
-            int square = get_ls1b_index(bitboard);
-            int row_attacker = square / 8;
-            int column_attacker = square % 8;
-            int row_king = king_square_black / 8;
-            int column_king = king_square_black % 8;
+            int square = __builtin_ctzll(bitboard);
+            int row_attacker = square >> 3;
+            int column_attacker = square & 7;
+            int row_king = king_square_black >> 3;
+            int column_king = king_square_black & 7;
 
             int distance = 16 - (abs(row_king - row_attacker) + abs(column_king - column_attacker));
             black_king_distance -= distance * king_distance_heuristic[piece % 6];
