@@ -753,13 +753,6 @@ int Skunk::bit_count(U64 board) {
     return count;
 }
 
-// int Skunk::get_ls1b_index(U64 board) {
-//     if (board == 0) return -1;
-//     unsigned int folded;
-//     folded  = (int)((board ^ (board-1)) >> 32);
-//     folded ^= (int)( board ^ (board-1)); // lea
-//     return lsb_64_table[folded * 0x78291ACF >> 26];
-// }
 
 U64 Skunk::set_occupancy(int index, int bits_in_mask, U64 attack_mask) {
     U64 occupancy = 0ULL;
