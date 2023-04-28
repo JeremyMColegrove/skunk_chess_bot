@@ -1339,6 +1339,7 @@ int Skunk::quiesence(int alpha, int beta) {
 
     // Calculate the evaluation score
     int evaluation = evaluate();// + static_cast<int>(log(moves_list.count + 1) * 0.5 * MOBILITY_WEIGHT) - (check ? KING_SAFETY_WEIGHT : 0);
+    
 
     // Alpha-beta pruning
     if (evaluation >= beta) {
@@ -1432,10 +1433,32 @@ TTEntry *Skunk::probe_transposition_table(U64 zobristKey) {
     return nullptr;
 }
 
+bool Skunk::should_do_null_move() {
+    /* should NOT do null move if 
+    the side to move has only its king and pawns remaining
+    the side to move has a small number of pieces remaining
+    the previous move in the search was also a null move.
+    */
+
+    int num_major;
+    // count the number of major pieces
+    if (side == white) {
+        num_major = piece_count[B] + piece_count[R] + piece_count[Q] + piece_count[N];
+    } else {
+        num_major = piece_count[b] + piece_count[r] + piece_count[q] + piece_count[n];
+    }
+
+
+    // side to move has too few of pieces
+    // if (num_major <= 3) return false;
+
+    return true;
+}
+
 // new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
     
-    int check,best_move = 0, current_move, best_score = (float)INT_MIN, current_score;
+    int check,best_move = 0, current_move, best_score = -INT_MAX, current_score;
     t_line line = {.cmove = 0};
     
     nodes++;
@@ -1446,11 +1469,10 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     if (force_stop) return 0;
 
-    check = is_check();
-
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
-            return quiesence(alpha, beta);
+        int q = quiesence(alpha, beta);
+        return q;
     }
 
     if (ply && is_repetition()) {
@@ -1474,6 +1496,8 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
     #endif
 
+    check = is_check();
+
     t_moves moves_list;
     generate_moves(moves_list);
     sort_moves(moves_list.moves, moves_list.count);
@@ -1487,7 +1511,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
         // Verified null move and other code here...
 #ifdef VERIFIED_NULL_MOVE
-    if (!check && do_null == DO_NULL) {
+    if (!check && do_null == DO_NULL && should_do_null_move()) {
 
         // Save the current board state
         copy_board();
@@ -1503,26 +1527,29 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         // Increase the ply
         ply++;
 
+        
         // Perform a reduced-depth search with the null move
-        best_score = -negamax(-beta, -beta + 1, depth - NULL_R, verify, NO_NULL, nullptr);
+        int null_move_score = -negamax(-beta, -beta + 1, depth - NULL_R, verify, NO_NULL, nullptr);
 
         // Decrease the ply and restore the previous board state
         ply--;
         restore_board();
 
         // Check if the null move caused a beta-cutoff
-        if (best_score >= beta) {
-
+        if (null_move_score >= beta) {
             // verification search
-            best_score = -negamax(-beta, -beta + 1, depth - 1, verify, NO_NULL, nullptr);
-            if (best_score >= beta) {
-                
-                return best_score;
-            }
+            // null_move_score = -negamax(-beta, -beta + 1, depth - 1, verify, NO_NULL, nullptr);
+            null_move_pruned++;
+            // if (null_move_score >= beta) {
+                // null_move_pruned++;
+            return null_move_score;
+            // }
+            // return null_move_score;
         }
     }
 #endif
 
+    best_score = -INT_MAX;
     // perform search
     copy_board();
 
@@ -1569,27 +1596,29 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                 pline->cmove = line.cmove + 1;
             }
-        }
 
-        if (alpha >= beta) {
-            // Update killer moves and history here...
-#ifdef KILLER_HISTORY
-            // ADD mask ply check here to avoid segfaults
-            // if (!is_capture(current_move) && ply < MAX_PLY) {
-            //     history_moves[side][decode_source(current_move)][decode_destination(current_move)] += depth*depth;
-            //     killer_moves[1][ply] = killer_moves[0][ply];
-            //     killer_moves[0][ply] = current_move;
-            // }
-            if (!is_capture(current_move) && ply < MAX_PLY) {
-                update_heuristics(ply, current_move, depth);
+            if (alpha >= beta) {
+                // Update killer moves and history here...
+    #ifdef KILLER_HISTORY
+                // ADD mask ply check here to avoid segfaults
+                // if (!is_capture(current_move) && ply < MAX_PLY) {
+                //     history_moves[side][decode_source(current_move)][decode_destination(current_move)] += depth*depth;
+                //     killer_moves[1][ply] = killer_moves[0][ply];
+                //     killer_moves[0][ply] = current_move;
+                // }
+                if (!is_capture(current_move) && ply < MAX_PLY) {
+                    update_heuristics(ply, current_move, depth);
+                }
+    #endif
+
+    #ifdef TRANSPOSITION_TABLE
+                store_transposition_table(zobrist, beta, depth, best_move, LOWER_BOUND);
+    #endif  
+                return beta;
             }
-#endif
-
-#ifdef TRANSPOSITION_TABLE
-            store_transposition_table(zobrist, beta, depth, best_move, LOWER_BOUND);
-#endif
-            return beta;
         }
+
+        
     }
 
 #ifdef TRANSPOSITION_TABLE
@@ -1626,7 +1655,9 @@ int Skunk::search(int maxDepth) {
     q_nodes = 0;
     nodes = 0;
 
-    int alpha = INT_MIN + 1, beta = INT_MAX;
+    null_move_pruned = 0;
+
+    int alpha = -INT_MAX, beta = INT_MAX;
 
     for (int depth = 0; depth < maxDepth; depth++) {
 
@@ -1646,7 +1677,7 @@ int Skunk::search(int maxDepth) {
         } else if (score > CHECKMATE - 2000) {
             printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, depth + 1, nodes, q_nodes, elapsed);
         } else {
-            std::cout << "info transpositions " << cache_hit << " score cp " << score << " depth " << depth + 1 << " nodes " << nodes << " time " << elapsed << " pv ";
+            std::cout << "info transpositions " << cache_hit << " pruned: " << null_move_pruned << " score cp " << score << " depth " << depth + 1 << " nodes " << nodes << " time " << elapsed << " pv ";
         } 
         // copy this pline to the previous pline struct so we can use it in next search
         memcpy(&previous_pv_line, &pline, sizeof(t_line));
@@ -1722,6 +1753,9 @@ int Skunk::evaluate() {
 
     int score = opening_score * game_phase + endgame_score * (1.0f - game_phase);
 
+    if (-abs(score)<-99999) {
+        std::cout << opening_score <<  ":" << game_phase << ":" << endgame_score << std::endl;
+    }
     // Return the score based on the side to move
     return (side == white ? score : -score);
 }

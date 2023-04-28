@@ -38,6 +38,17 @@
 
 // flag for verified null move pruning
 #define VERIFIED_NULL_MOVE
+/*WITH: 
+info transpositions 1397729 pruned: 119764 score cp 45 depth 13 nodes 11108943 time 4197 pv b4f4 h4g3 
+info transpositions 3938647 pruned: 313406 score cp 45 depth 14 nodes 26868652 time 9412 pv b4f4 
+bestmove b4f4
+*/
+
+/*
+info transpositions 1657276 pruned: 0 score cp 45 depth 13 nodes 12262465 time 4509 pv b4f4 h4g3 
+bestmove b4f4
+*/
+
 
 // alpha beta flag
 #define ALPHA_BETA
@@ -607,7 +618,8 @@ public:
     void parse_option(char *command);
     void parse_debug(char *command);
     void parse_perft(const std::string& move_string);
-
+    bool should_do_null_move();
+    size_t null_move_pruned = 0;
     char *fen_start = (char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;
     int wtime = 0;
