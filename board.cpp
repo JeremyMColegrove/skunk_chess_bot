@@ -67,7 +67,7 @@ void Skunk::parse_fen(const std::string& fen) {
     // parse enpassant square
     if (fen[++fen_idx] != '-') {
         int file = fen[fen_idx++] - 'a';
-        int rank = 8 - (fen[fen_idx] - '1');
+        int rank = 8 - (fen[fen_idx] - '0');
         enpassant = rank * 8 + file;
     } else {
         enpassant = no_square;
@@ -849,11 +849,9 @@ void Skunk::generate_moves(t_moves &moves_list)
         opponent_bitboards=bitboards;
     }
 
-    // make sure there are no pieces of same color, and the opponent is not attacking the square
-    // the attacked_squares for the king is a little bit more complicated. We must remove the king from the board, then generate enemy_attacks
-
     int king_square = __builtin_ctzll(bitboards[king]);
-
+    
+    if (king_square)
     pop_bit(occupancies[both], king_square);
     attack_sliders = get_slider_attacks();
     attack_jumpers = get_jumper_attacks();
@@ -910,17 +908,15 @@ void Skunk::generate_moves(t_moves &moves_list)
         push_mask = 0xFFFFFFFFFFFFFFFF;
 
     } else {
-
         // the capture mask contains how many pieces are checking the king.
         // //If more than one piece, the only valid moves are king moves. We can escape early here.
-        int bit = __builtin_ctzll(capture_mask);
-        pop_lsb(capture_mask);
-        if (capture_mask > 0) {
+        int count = __builtin_popcountll(capture_mask); 
+
+        if (count > 1) {
             return;
         }
-        set_bit(capture_mask, bit);
     }
-
+    // print_bitboard(push_mask);
     /******************************************\
      *
      *              PINNED PIECES
@@ -986,10 +982,13 @@ void Skunk::generate_moves(t_moves &moves_list)
 
 
     U64 filtered_capture_mask = capture_mask, filtered_push_mask = push_mask;
+
     // do pawn attacks first
     if (enpassant != no_square) {
         filtered_capture_mask |= (1ULL << enpassant);
         filtered_push_mask |= (1ULL << enpassant);
+        // print_bitboard(filtered_capture_mask);
+        // print_bitboard(filtered_push_mask);
     }
 
     pieces = unpinned_pieces[pawn];
@@ -998,6 +997,7 @@ void Skunk::generate_moves(t_moves &moves_list)
         // get this persons attacks
 
         attacks = get_attacks(pawn, square, side) & (filtered_capture_mask | filtered_push_mask);
+
         // add each filtered (non promotion) attack
         U64 filtered = attacks & ~row8 & ~row1;
 
@@ -1011,28 +1011,49 @@ void Skunk::generate_moves(t_moves &moves_list)
                 pop_bit(occupancies[both], square);
 
                 pop_bit(occupancies[both], victim);
+
+                set_bit(occupancies[both], enpassant);
+
                 // check if the king is horizontally in check by any queen or rook
+                // !!! Note Apr 28 2023, forgot to do diagonal attacks !!!
                 // include any pinned pieces in this check
+
                 // check each queen
-                int lsq = nearest_square[DW][king_square], rsq=nearest_square[DE][king_square];
+                int lsq = nearest_square[DW][king_square], rsq=nearest_square[DE][king_square], usq = nearest_square[DN][king_square], dsq=nearest_square[DS][king_square];
+                U64 horizontal_mask = rays[king_square][lsq] | rays[king_square][rsq] | rays[king_square][usq] | rays[king_square][dsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << usq) | (1ULL << dsq) | (1ULL << king_square);
+                U64 king_possible_pin_masks = get_queen_attacks(king_square, occupancies[both]) | (1ULL << king_square);//(rays[king_square][lsq] | rays[king_square][rsq] | rays[king_square][usq] | rays[king_square][dsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << usq) | (1ULL << dsq) | (1ULL << king_square));
+                
 
-                U64 horizontal_mask = (rays[king_square][lsq] | rays[king_square][rsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << king_square));
-
-                // only get rooks and queens on the horizontal row
-                U64 horizontal_attackers = (opponent_bitboards[R] | opponent_bitboards[Q]) & horizontal_mask;
-
+                U64 horizontal_attackers = (opponent_bitboards[R] | opponent_bitboards[Q]) & (king_possible_pin_masks & horizontal_mask);
+                U64 diagonal_attackers = ( opponent_bitboards[B] | opponent_bitboards[Q]) & (king_possible_pin_masks & ~horizontal_mask);
+                
+                // print_bitboard(horizontal_attackers);
+                // print_bitboard(diagonal_attackers);
+                // print_bitboard(king_possible_pin_masks);
                 U64 sliders = 0ULL;
+                U64 diagonals = 0ULL;
 
+                // check if king is in attack after any enpassant moves from horizontal pieces
                 while (horizontal_attackers) {
                     int horizontal_attacker_square = __builtin_ctzll(horizontal_attackers);
                     sliders |= get_rook_attacks(horizontal_attacker_square, occupancies[both]);
                     pop_lsb(horizontal_attackers);
                 }
 
-                if ((sliders & bitboards[king]) == 0) {
+                // check if king is in attack after any enpassant moves from diagonal pieces
+                while (diagonal_attackers) {
+                    int diagonal_attacker_square = __builtin_ctzll(diagonal_attackers);
+                    diagonals |= get_bishop_attacks(diagonal_attacker_square, occupancies[both]);
+                    pop_lsb(diagonal_attackers);
+                }
+                // print_bitboard(diagonals);
+
+                // the pawn enpassant does not put the king in check by horizontal sliders
+                if (((sliders | diagonals) & bitboards[king]) == 0) {
                     moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, 0, 1, 0);
                 }
 
+                pop_bit(occupancies[both], enpassant);
                 set_bit(occupancies[both], square);
 
                 set_bit(occupancies[both], victim);
@@ -1446,7 +1467,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
-            return quiesence(alpha, beta);
+        return quiesence(alpha, beta);
     }
 
     #ifdef TRANSPOSITION_TABLE
@@ -1468,6 +1489,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     #endif
 
     t_moves moves_list;
+    moves_list.count = -1;
     generate_moves(moves_list);
     sort_moves(moves_list.moves, moves_list.count);
 
@@ -2124,7 +2146,7 @@ void Skunk::parse_perft(const std::string& command) {
     perft_test(depth);
 }
 
-void Skunk::perft_test(int depth) {
+int Skunk::perft_test(int depth) {
     printf("Starting PERFT test...\n");
     memset(&perft_results, 0, sizeof(perft));
 
@@ -2152,6 +2174,20 @@ void Skunk::perft_test(int depth) {
                perft_results.promotions[i+1]);
     }
     printf("Nodes: %lld\nTime: %d\nNPS: %d\n", perft_results.total_nodes, elapsed, per_second*1000);
+    return perft_results.nodes[1];
+}
+
+bool Skunk::perft_test_position(const std::string &fen, int expected_result, int depth) {
+    // parse_command("position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", skunk);
+    parse_fen(fen);
+    int result = perft_test(depth);
+    if (result == expected_result) {
+        std::cout << "\u2713\tPassed (" << result << ")" << std::endl;
+        return true;
+    }
+        
+    std::cout << "\tFailed (result was " << result << ", expected was "<< expected_result << ")"  << std::endl;
+    return false;
 }
 
 

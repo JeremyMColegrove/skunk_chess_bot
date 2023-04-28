@@ -556,7 +556,8 @@ public:
     inline void generate_moves(t_moves &moves_list);
     inline void print_move_detailed(int move);
     inline int make_move(int move, int move_flag);
-    inline void perft_test(int depth);
+    inline int perft_test(int depth);
+    bool perft_test_position(const std::string &fen, int expected_result, int depth);
     int evaluate();
     inline int null_ok();
     inline int search(int maxDepth);
