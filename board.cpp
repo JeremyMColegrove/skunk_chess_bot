@@ -1459,6 +1459,7 @@ bool Skunk::should_do_null_move() {
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
     
     int check,best_move = 0, current_move, best_score = -INT_MAX, current_score;
+    bool fail_high = false;
     t_line line = {.cmove = 0};
     
     nodes++;
@@ -1483,6 +1484,11 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         if (entry != nullptr && entry->depth >= depth) {
             if (entry->type == EXACT) {
                 cache_hit++;
+                if (ply == 0 && pline != nullptr) {
+                    pline->argmove[0] = entry->move;
+                    memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
+                    pline->cmove = line.cmove + 1;
+                }
                 return entry->value;
             } else if (entry->type == LOWER_BOUND) {
                 alpha = std::max(alpha, (entry->value));
@@ -1510,8 +1516,9 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
 
         // Verified null move and other code here...
+        // NULL move implemented from: https://arxiv.org/pdf/0808.1125.pdf
 #ifdef VERIFIED_NULL_MOVE
-    if (!check && do_null == DO_NULL && should_do_null_move()) {
+    if ( do_null == DO_NULL && (!verify || depth > 1) && !check) {
 
         // Save the current board state
         copy_board();
@@ -1529,7 +1536,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
         
         // Perform a reduced-depth search with the null move
-        int null_move_score = -negamax(-beta, -beta + 1, depth - NULL_R, verify, NO_NULL, nullptr);
+        int null_move_score = -negamax(-beta, -beta + 1, depth - 1 - NULL_R, verify, NO_NULL, nullptr);
 
         // Decrease the ply and restore the previous board state
         ply--;
@@ -1537,14 +1544,16 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
         // Check if the null move caused a beta-cutoff
         if (null_move_score >= beta) {
-            // verification search
-            // null_move_score = -negamax(-beta, -beta + 1, depth - 1, verify, NO_NULL, nullptr);
-            null_move_pruned++;
-            // if (null_move_score >= beta) {
-                // null_move_pruned++;
-            return null_move_score;
-            // }
-            // return null_move_score;
+
+            if (verify) {
+                depth --;
+                verify = false;
+                fail_high = true;
+            } else {
+                null_move_pruned++;
+                
+                return null_move_score;
+            }
         }
     }
 #endif
@@ -1559,6 +1568,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         ply++;
         repitition.table[repitition.count++] = zobrist;
 
+        re_search:
         if (i == 0) {
             current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
         } else {
@@ -1570,6 +1580,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 current_score = alpha + 1;
             }
 
+            
             // Principal Variation Search (PVS)
             if (current_score > alpha) {
                 current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, nullptr);
@@ -1583,6 +1594,14 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             best_score = current_score;
             best_move = current_move;
         }
+
+        // null move verification re-check if not beta cuttoff was found
+        // if (fail_high && current_score < beta) {
+        //     depth ++;
+        //     fail_high = false;
+        //     verify = true;
+        //     // goto re_search;
+        // }
 
         restore_board();
         ply--;
@@ -1617,8 +1636,6 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 return beta;
             }
         }
-
-        
     }
 
 #ifdef TRANSPOSITION_TABLE
@@ -1633,6 +1650,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     store_transposition_table(zobrist, best_score, depth, best_move, type);    
 #endif
 
+    
     return best_score;
 }
 

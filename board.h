@@ -46,6 +46,18 @@ bestmove b4f4
 */
 
 /*
+NEW NULL MOVE W/ VERIFICATION
+info transpositions 1678767 pruned: 38058 score cp 45 depth 13 nodes 13485162 time 4957 pv b4f4 h4g3 
+bestmove b4f4
+*/
+
+/*
+NEW NULL MOVE W/PROPER VERIFICATION
+info transpositions 1514882 pruned: 4680 score cp 45 depth 13 nodes 12068919 time 4515 pv b4f4 h4g3 
+bestmove b4f4
+*/
+
+/*
 NO NULL MOVE
 info transpositions 1657276 pruned: 0 score cp 45 depth 13 nodes 12262465 time 4509 pv b4f4 h4g3 
 bestmove b4f4
@@ -56,6 +68,8 @@ info transpositions 1475232 score cp 45 depth 13 nodes 11237995 time 4213 pv b4f
 info transpositions 4139077 score cp 45 depth 14 nodes 27074313 time 9354 pv b4f4 
 bestmove b4f4
 */
+
+
 
 
 // alpha beta flag
