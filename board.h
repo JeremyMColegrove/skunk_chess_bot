@@ -31,7 +31,7 @@
 #define TRANSPOSITION_TABLE
 
 // transposition table size
-#define HASH_SIZE 399990
+#define HASH_SIZE (1 << 20)
 
 // flag for enabling futility pruning in quiescence search
 #define FUTILITY_PRUNE
@@ -224,6 +224,15 @@ const char ascii_pieces[] = "PNBRQKpnbrqk";
        STRUCTS
 \*********************/
 
+// transposition table
+struct TTEntry {
+    U64 zobristKey;
+    int value;
+    int move;
+    int16_t depth;
+    uint8_t type;
+};
+
 typedef struct {
     int moves[256];
     int count;
@@ -240,14 +249,6 @@ typedef struct {
     int score;
 } t_result;
 
-typedef struct {
-    U64 hash;
-    int depth;
-    int flags;
-    int score;
-    int move;
-    int nodes;
-} t_entry;
 
 typedef struct {
     long long int total_nodes;
@@ -563,14 +564,19 @@ public:
     // History table (for each piece and destination square)
     int history_table[12][64];
 
-    t_entry *transposition_table = NULL; // tt table for negamax search
-
     // repitition array for 3 move repitition
     t_repitition repitition;
 
 
 
     t_line previous_pv_line;
+    
+    
+    TTEntry transpositionTable[HASH_SIZE];
+    enum NodeType { LOWER_BOUND, UPPER_BOUND, EXACT };
+    TTEntry *probe_transposition_table(U64 zobristKey);
+    void store_transposition_table(U64 zobristKey, int16_t value, int16_t depth, int move, NodeType type);
+
 
     inline int is_repetition();
     void init_precomputed_masks();
@@ -613,8 +619,7 @@ public:
     inline void init();
     inline void test_moves_sort();
     inline void print_moves(t_moves &moves_list);
-    inline void clear_transposition_tables();
-    inline void write_hash_entry(int score, int depth, int move, int flag) const;
+
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
 
