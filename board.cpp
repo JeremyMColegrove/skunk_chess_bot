@@ -158,23 +158,6 @@ void Skunk::init() {
     
     init_heuristics();
 
-    //transposition table init
-    // try and init the transposition table
-#ifdef TRANSPOSITION_TABLE
-    transposition_table = new t_entry [HASH_SIZE];
-
-    if (transposition_table == NULL) {
-        perror("Can not initialize transposition table, out of memory\n");
-        exit(1);
-    }
-    clear_transposition_tables();
-#endif
-}
-
-void Skunk::clear_transposition_tables() {
-#ifdef TRANSPOSITION_TABLE
-    memset(transposition_table, 0ULL, sizeof(t_entry) * HASH_SIZE);
-#endif
 }
 
 
@@ -237,9 +220,7 @@ U64 Skunk::get_random_U64_number()
     return n1 | (n2 << 16) | (n3 << 32) | (n4 << 48);
 }
 Skunk::~Skunk() {
-    if (transposition_table != NULL) {
-        delete[] transposition_table;
-    }
+
 }
 
 void Skunk::construct_file_masks() {
@@ -1339,19 +1320,6 @@ int Skunk::is_check() {
     return is_square_attacked(__builtin_ctzll(bitboards[side==white?K:k]), side^1);
 }
 
-void Skunk::write_hash_entry(int score, int depth, int move, int flag) const {
-#ifdef TRANSPOSITION_TABLE
-    t_entry  *entry = &transposition_table[zobrist % HASH_SIZE];
-
-    // if there is a clash, choose the TT with the higher nodes searched
-    entry->score = score;
-    entry->depth = depth;
-    entry->hash = zobrist;
-    entry->move = move;
-    entry->flags = flag;
-    entry->nodes = nodes;
-#endif
-}
 
 int Skunk::quiesence(int alpha, int beta) {
     q_nodes++;
@@ -1447,6 +1415,23 @@ int Skunk::quiesence(int alpha, int beta) {
     return alpha;
 }
 
+void Skunk::store_transposition_table(U64 zobristKey, int16_t value, int16_t depth, int move, NodeType type) {
+    TTEntry *entry = &transpositionTable[zobristKey & (HASH_SIZE - 1)];
+    entry->zobristKey = zobristKey;
+    entry->value = value;
+    entry->depth = depth;
+    entry->move = move;
+    entry->type = type;
+}
+
+TTEntry *Skunk::probe_transposition_table(U64 zobristKey) {
+    TTEntry *entry = &transpositionTable[zobristKey & (HASH_SIZE - 1)];
+    if (entry->zobristKey == zobristKey) {
+        return entry;
+    }
+    return nullptr;
+}
+
 // new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
     nodes++;
@@ -1464,6 +1449,24 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             return quiesence(alpha, beta);
     }
 
+    #ifdef TRANSPOSITION_TABLE
+        TTEntry *entry = probe_transposition_table(zobrist);
+        if (entry != nullptr && entry->depth >= depth) {
+            if (entry->type == EXACT) {
+                cache_hit++;
+                return entry->value;
+            } else if (entry->type == LOWER_BOUND) {
+                alpha = std::max(alpha, (entry->value));
+            } else if (entry->type == UPPER_BOUND) {
+                beta = std::min(beta, (entry->value));
+            }
+            if (alpha >= beta) {
+                cache_hit++;
+                return entry->value;
+            }
+        }
+    #endif
+
     t_moves moves_list;
     generate_moves(moves_list);
     sort_moves(moves_list.moves, moves_list.count);
@@ -1480,38 +1483,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     int best_move = 0, current_move, best_score = (float)INT_MIN, current_score;
     if (check) depth++;
 
-#ifdef TRANSPOSITION_TABLE
-    int _alpha = alpha;
-    t_entry *entry = &transposition_table[zobrist % HASH_SIZE];
-    int is_pv = (beta - alpha) > 1;
 
-    if (entry->hash == zobrist && entry->depth >= depth && !is_pv) {
-        int score = entry->score;
-
-        switch (entry->flags) {
-            case HASH_EXACT:
-                cache_hit++;
-                if (ply == 0 && pline != nullptr) {
-                    pline->argmove[0] = entry->move;
-                    memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
-                    pline->cmove = line.cmove + 1;
-                }
-                return entry->score;
-            case HASH_LOWERBOUND:
-                alpha = alpha>entry->score?alpha:entry->score;//std::max(alpha, entry->score);
-                break;
-            case HASH_UPPERBOUND:
-                beta = beta>entry->score?entry->score:beta;
-            default:
-                break;
-        }
-
-        if (alpha >= beta) {
-            cache_hit++;
-            return score;
-        }
-    }
-#endif
 
 
         // Verified null move and other code here...
@@ -1620,18 +1592,22 @@ bestmove e2a6
 #endif
 
 #ifdef TRANSPOSITION_TABLE
-            write_hash_entry(beta, depth, best_move, HASH_LOWERBOUND);
+            store_transposition_table(zobrist, beta, depth, best_move, LOWER_BOUND);
 #endif
             return beta;
         }
     }
 
-    // Update transposition table here...
 #ifdef TRANSPOSITION_TABLE
-    int flag = HASH_EXACT;
-    if (best_score <= _alpha) flag = HASH_UPPERBOUND;
-    else if (best_score >= beta) flag = HASH_LOWERBOUND;
-    write_hash_entry(best_score, depth, best_move, flag);
+    NodeType type;
+    if (best_score <= alpha) {
+        type = UPPER_BOUND;
+    } else if (best_score >= beta) {
+        type = LOWER_BOUND;
+    } else {
+        type = EXACT;
+    }
+    store_transposition_table(zobrist, best_score, depth, best_move, type);    
 #endif
 
     return best_score;

@@ -31,58 +31,13 @@
 #define TRANSPOSITION_TABLE
 
 // transposition table size
-#define HASH_SIZE 399990
+#define HASH_SIZE (1 << 20)
 
 // flag for enabling futility pruning in quiescence search
 #define FUTILITY_PRUNE
 
-// flag for enabling NULL MOVE in negamax (DEPRECATED. USE VERIFIED NULL MOVE INSTEAD)
-// #define NULL_MOVE
-
 // flag for verified null move pruning
 #define VERIFIED_NULL_MOVE
-/*
-with:
-info transpositions 123589 ttp: 0.0772 score cp -103 depth 8 nodes 1600156 q_nodes 1503679 time 2051 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-bestmove h4f2
-
-without:
-info transpositions 77515 ttp: 0.0574 score cp -103 depth 8 nodes 1350171 q_nodes 1412232 time 2057 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-bestmove h4f2
-*/
-// flag for killer and history move orderings
-// #define KILLER_HISTORY
-/*
-with:
-info transpositions 245891 ttp: 0.0609 score mate 5 depth 9 nodes 4039027 q_nodes 3955721 time 5553 pv h4f4 e3d3 h2h3 d3e2 f4f3 e2d2 f3f2 c3e2 b8f4 d2e1 h3h1 e1f1 h3h1 d5d6 
-bestmove h4f4
-
-without:
-info transpositions 279561 ttp: 0.0632 score mate 5 depth 9 nodes 4426878 q_nodes 4136529 time 3474 pv h4f4 e3d3 h2h3 d3e2 f4f3 e2d2 f3f2 c3e2 b8f4 d2e1 h3h1 a8b8 
-bestmove h4f4
-
-without:
-info transpositions 128760 ttp: 0.0536 score cp -103 depth 8 nodes 2400091 q_nodes 2398103 time 2008 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-bestmove h4f2
-
-info transpositions 133297 ttp: 0.0533 score cp -103 depth 8 nodes 2500187 q_nodes 2489157 time 2004 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-bestmove h4f2
-
-with:
-info transpositions 123589 ttp: 0.0772 score cp -103 depth 8 nodes 1600156 q_nodes 1503679 time 2051 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-bestmove h4f2
-
-
-with sorting killer heuristic:
-info transpositions 78277 ttp: 0.0602 score cp -103 depth 8 nodes 1300125 q_nodes 1518580 time 2054 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-bestmove h4f2
-
-without sorting:
-info transpositions 42553 ttp: 0.0266 score cp -475 depth 5 nodes 1600088 q_nodes 3748965 time 2036 pv b8f4 e3d3 f4c1 d1c1 h4f2 a8h8 
-bestmove b8f4
-*/
-//nodes  9962767 q_nodes  8342748
-//nodes 16636803 q_nodes 15374640
 
 // alpha beta flag
 #define ALPHA_BETA
@@ -224,6 +179,15 @@ const char ascii_pieces[] = "PNBRQKpnbrqk";
        STRUCTS
 \*********************/
 
+// transposition table
+struct TTEntry {
+    U64 zobristKey;
+    int value;
+    int move;
+    int16_t depth;
+    uint8_t type;
+};
+
 typedef struct {
     int moves[256];
     int count;
@@ -240,14 +204,6 @@ typedef struct {
     int score;
 } t_result;
 
-typedef struct {
-    U64 hash;
-    int depth;
-    int flags;
-    int score;
-    int move;
-    int nodes;
-} t_entry;
 
 typedef struct {
     long long int total_nodes;
@@ -563,14 +519,19 @@ public:
     // History table (for each piece and destination square)
     int history_table[12][64];
 
-    t_entry *transposition_table = NULL; // tt table for negamax search
-
     // repitition array for 3 move repitition
     t_repitition repitition;
 
 
 
     t_line previous_pv_line;
+    
+    
+    TTEntry transpositionTable[HASH_SIZE];
+    enum NodeType { LOWER_BOUND, UPPER_BOUND, EXACT };
+    TTEntry *probe_transposition_table(U64 zobristKey);
+    void store_transposition_table(U64 zobristKey, int16_t value, int16_t depth, int move, NodeType type);
+
 
     inline int is_repetition();
     void init_precomputed_masks();
@@ -613,8 +574,7 @@ public:
     inline void init();
     inline void test_moves_sort();
     inline void print_moves(t_moves &moves_list);
-    inline void clear_transposition_tables();
-    inline void write_hash_entry(int score, int depth, int move, int flag) const;
+
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
 
