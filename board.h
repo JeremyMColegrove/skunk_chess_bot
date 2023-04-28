@@ -38,14 +38,22 @@
 
 // flag for verified null move pruning
 #define VERIFIED_NULL_MOVE
-/*WITH: 
+/*
+NEW NULL MOVE
 info transpositions 1397729 pruned: 119764 score cp 45 depth 13 nodes 11108943 time 4197 pv b4f4 h4g3 
 info transpositions 3938647 pruned: 313406 score cp 45 depth 14 nodes 26868652 time 9412 pv b4f4 
 bestmove b4f4
 */
 
 /*
+NO NULL MOVE
 info transpositions 1657276 pruned: 0 score cp 45 depth 13 nodes 12262465 time 4509 pv b4f4 h4g3 
+bestmove b4f4
+*/
+
+/* OLD NULL MOVE
+info transpositions 1475232 score cp 45 depth 13 nodes 11237995 time 4213 pv b4f4 h4g3 
+info transpositions 4139077 score cp 45 depth 14 nodes 27074313 time 9354 pv b4f4 
 bestmove b4f4
 */
 
