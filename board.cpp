@@ -1434,6 +1434,10 @@ TTEntry *Skunk::probe_transposition_table(U64 zobristKey) {
 
 // new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
+    
+    int check,best_move = 0, current_move, best_score = (float)INT_MIN, current_score;
+    t_line line = {.cmove = 0};
+    
     nodes++;
 
     if ((nodes % time_check_node_interval) == 0) {
@@ -1442,13 +1446,16 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     if (force_stop) return 0;
 
-    int check = is_check();
+    check = is_check();
 
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
             return quiesence(alpha, beta);
     }
 
+    if (ply && is_repetition()) {
+        return 0;
+    }
     #ifdef TRANSPOSITION_TABLE
         TTEntry *entry = probe_transposition_table(zobrist);
         if (entry != nullptr && entry->depth >= depth) {
@@ -1475,27 +1482,19 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         return check ? (-CHECKMATE) + ply : 0;
     }
 
-    if (ply && is_repetition()) {
-        return 0;
-    }
-
-    t_line line = {.cmove = 0};
-    int best_move = 0, current_move, best_score = (float)INT_MIN, current_score;
     if (check) depth++;
-
-
 
 
         // Verified null move and other code here...
 #ifdef VERIFIED_NULL_MOVE
-    if (!check && (depth > 1 || !verify) && do_null == DO_NULL) {
+    if (!check && do_null == DO_NULL) {
+
         // Save the current board state
         copy_board();
 
-        // Make a null move
+        // Make a null move (switch sides without moving a piece)
         side ^= 1;
         zobrist ^= side_key;
-
         if (enpassant != no_square) {
             zobrist ^= enpassant_keys[enpassant];
         }
@@ -1505,31 +1504,26 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         ply++;
 
         // Perform a reduced-depth search with the null move
-        int null_move = -negamax(-beta, -beta + 1, depth - NULL_R, verify, NO_NULL, nullptr);
+        best_score = -negamax(-beta, -beta + 1, depth - NULL_R, verify, NO_NULL, nullptr);
 
         // Decrease the ply and restore the previous board state
         ply--;
         restore_board();
 
         // Check if the null move caused a beta-cutoff
-        if (null_move >= beta) {
-            if (verify) {
-                verify = 0;
-                depth--;
-            } else {
-                /*
-                info transpositions 123589 ttp: 0.0772 score cp -103 depth 8 nodes 1600156 q_nodes 1503679 time 2051 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-                bestmove h4f2
-                */
-                return null_move;
+        if (best_score >= beta) {
+
+            // verification search
+            best_score = -negamax(-beta, -beta + 1, depth - 1, verify, NO_NULL, nullptr);
+            if (best_score >= beta) {
+                
+                return best_score;
             }
         }
     }
 #endif
-    /*
-    info transpositions 94278 ttp: 0.1047 score mate 1073491823 depth 9 nodes 900073 q_nodes 376163 time 2028 pv 
-bestmove e2a6
-*/
+
+    // perform search
     copy_board();
 
     for (int i = 0; i < moves_list.count; i++) {
