@@ -156,6 +156,7 @@ void parse_command(const std::string& cmd, Skunk* skunk) {
         t_moves moves;
         skunk->generate_moves(moves);
         skunk->print_board();
+        skunk->sort_moves(moves.moves, moves.count);
         skunk->print_moves(moves);
     } else if (cmd == "score") {
         std::cout << skunk->evaluate() << std::endl;
