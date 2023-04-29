@@ -957,7 +957,7 @@ void Skunk::generate_moves(t_moves &moves_list)
 
                 // which type of piece is it? Shoot, we need to know this to generate its attacks
                 U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1);
-                
+
                 int nearest_sq = nearest_square[direction][enemy_square];
 
                 intersection  &= rays[enemy_square][nearest_sq];
@@ -1519,6 +1519,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 #endif
 
     copy_board();
+    int searched_moves = 0;
 
     for (int i = 0; i < moves_list.count; i++) {
         current_move = moves_list.moves[i];
@@ -1527,26 +1528,29 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         repitition.table[repitition.count++] = zobrist;
 
         re_search:
-        if (i == 0) {
-            current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
-        } else {
-            // Late Move Reductions (LMR)
-            if (i > 3 && depth > 2 && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
-                int LMR_R = 2;
-                current_score = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, nullptr);
-            } else {
-                current_score = alpha + 1;
-            }
+        if (searched_moves >= LMR_DEPTH && depth >= LMR_MIN_DEPTH && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
+            // Apply LMR
+            current_score = -negamax(-alpha - 1, -alpha, depth - 1 - LMR_REDUCTION, verify, NO_NULL, &line);
 
-            // Principal Variation Search (PVS)
-            if (current_score > alpha) {
-                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, nullptr);
+            if (current_score > alpha && current_score < beta) {
+                // Re-search with full depth, as the move is better than expected
+                current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+            }
+        } else {
+            // Apply PVS
+            if (searched_moves == 0) {
+                current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+            } else {
+                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, &line);
+
                 if (current_score > alpha && current_score < beta) {
+                    // Re-search with full window, as the move is better than expected
                     current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
                 }
             }
         }
 
+        // check for best score and move
         if (current_score > best_score) {
             best_score = current_score;
             best_move = current_move;
@@ -1564,6 +1568,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         ply--;
         repitition.count--;
         moves--;
+        searched_moves++;
 
         if (best_score > alpha) {
             alpha = best_score;

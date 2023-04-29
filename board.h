@@ -41,11 +41,14 @@
 #define FUTILITY_PRUNE
 
 // flag for verified null move pruning
-#define VERIFIED_NULL_MOVE
+// #define VERIFIED_NULL_MOVE
 
 // alpha beta flag
 #define ALPHA_BETA
 
+#define LMR_DEPTH 4
+#define LMR_MIN_DEPTH 3
+#define LMR_REDUCTION 2
 
 /*********************\
        CONSTANTS
