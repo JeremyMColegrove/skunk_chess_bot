@@ -1468,7 +1468,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     }
 
     if (ply && is_repetition()) {
-        return -evaluate();
+        return -evaluate() * 0.25;
     }
     
     #ifdef TRANSPOSITION_TABLE
