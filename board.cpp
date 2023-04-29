@@ -963,15 +963,14 @@ void Skunk::generate_moves(t_moves &moves_list)
                     std::cout << "issue with direction" << std::endl;
                 }
 
-                
-
-
+        
                 int nearest_sq = nearest_square[direction][enemy_square];
 
                 
                 if (nearest_sq < 0 || nearest_sq > 63) {
-                    std::cout << "nearest_sq is wrong" << std::endl;
+                    std::cout << "nearest_sq is wrong" << nearest_sq << ":" << direction << ":" << enemy_square << std::endl;
                 }
+
                 intersection  &= rays[enemy_square][nearest_sq];
                 intersection &= king_ray;
                 intersection &= occupancies[side];
@@ -1241,8 +1240,8 @@ void Skunk::print_moves(t_moves &moves_list)
 void Skunk::init_heuristics() {
     // Initialize killer moves and history table to zero
     for (int i = 0; i < MAX_PLY; ++i) {
-        killerMoves[i][0] = -1;
-        killerMoves[i][1] = -1;
+        killer_moves[i][0] = -1;
+        killer_moves[i][1] = -1;
     }
     for (int piece = P; piece <= k; ++piece) {
         for (int square = 0; square < 64; ++square) {
@@ -1485,6 +1484,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     nodes++;
     int null_move_score;
     bool fail_high = false, check=false;
+
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
@@ -1610,6 +1610,14 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             best_move = current_move;
         }
 
+        // null move verification re-check if not beta cuttoff was found
+        if (fail_high && current_score < beta) {
+            depth ++;
+            fail_high = false;
+            verify = true;
+            goto re_search;
+        }
+
         restore_board();
         ply--;
         repitition.count--;
@@ -1624,13 +1632,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             }
         }
 
-        // null move verification re-check if not beta cuttoff was found
-        if (fail_high && current_score < beta) {
-            depth ++;
-            fail_high = false;
-            verify = true;
-            goto re_search;
-        }
+        
 
         if (alpha >= beta) {
             // Update killer moves and history here...
@@ -1673,7 +1675,6 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 // the top level call to get the best move
 int Skunk::search(int maxDepth) {
 
-    init_heuristics();
 
     // iterate through deepening as we go
     t_line pline = {.cmove = 0};
@@ -1689,7 +1690,11 @@ int Skunk::search(int maxDepth) {
 
     int alpha = INT_MIN + 1, beta = INT_MAX;
 
+
+
     for (int depth = 0; depth < maxDepth; depth++) {
+
+        init_heuristics();
 
         ply = 0;
         pline.cmove = 0;
