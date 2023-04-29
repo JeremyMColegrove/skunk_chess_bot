@@ -5,6 +5,7 @@
 #ifndef BITBOT_BOARD_H
 #define BITBOT_BOARD_H
 
+#include <time.h>
 #include <stdint.h>
 #include <string.h>
 #include <climits>
@@ -27,54 +28,28 @@
 // flag for enabling asserts in the code for debugging and error checking i.e. zobrist key checking
 //#define DEBUG
 
+// transposition table size
+#define HASH_SIZE (1 << 20)
+
 // flag for enabling the transposition table
 #define TRANSPOSITION_TABLE
 
-// transposition table size
-#define HASH_SIZE (1 << 20)
+// killer history
+#define KILLER_HISTORY
 
 // flag for enabling futility pruning in quiescence search
 #define FUTILITY_PRUNE
 
 // flag for verified null move pruning
+
 #define VERIFIED_NULL_MOVE
-/*
-NEW NULL MOVE
-info transpositions 1397729 pruned: 119764 score cp 45 depth 13 nodes 11108943 time 4197 pv b4f4 h4g3 
-info transpositions 3938647 pruned: 313406 score cp 45 depth 14 nodes 26868652 time 9412 pv b4f4 
-bestmove b4f4
-*/
-
-/*
-NEW NULL MOVE W/ VERIFICATION
-info transpositions 1678767 pruned: 38058 score cp 45 depth 13 nodes 13485162 time 4957 pv b4f4 h4g3 
-bestmove b4f4
-*/
-
-/*
-NEW NULL MOVE W/PROPER VERIFICATION
-info transpositions 1514882 pruned: 4680 score cp 45 depth 13 nodes 12068919 time 4515 pv b4f4 h4g3 
-bestmove b4f4
-*/
-
-/*
-NO NULL MOVE
-info transpositions 1657276 pruned: 0 score cp 45 depth 13 nodes 12262465 time 4509 pv b4f4 h4g3 
-bestmove b4f4
-*/
-
-/* OLD NULL MOVE
-info transpositions 1475232 score cp 45 depth 13 nodes 11237995 time 4213 pv b4f4 h4g3 
-info transpositions 4139077 score cp 45 depth 14 nodes 27074313 time 9354 pv b4f4 
-bestmove b4f4
-*/
-
-
-
 
 // alpha beta flag
 #define ALPHA_BETA
 
+#define LMR_DEPTH 4
+#define LMR_MIN_DEPTH 3
+#define LMR_REDUCTION 2
 
 /*********************\
        CONSTANTS
@@ -546,10 +521,8 @@ public:
     //history, side->source->destination (alternative could be piece->destination)
     // int history_moves[2][64][64];
     
-    // Killer moves table (two moves per ply)
-    int killerMoves[MAX_PLY][2];
 
-    // History table (for each piece and destination square)
+    // History table (for each piece type and destination square)
     int history_table[12][64];
 
     // repitition array for 3 move repitition
@@ -565,7 +538,7 @@ public:
     TTEntry *probe_transposition_table(U64 zobristKey);
     void store_transposition_table(U64 zobristKey, int16_t value, int16_t depth, int move, NodeType type);
 
-
+    int get_time_ms();
     inline int is_repetition();
     void init_precomputed_masks();
     U64 pawn_attack_span(int color, int square);
@@ -579,7 +552,7 @@ public:
     inline U64 get_rook_attacks(int square, U64 occupancy);
     inline U64 get_bishop_attacks(int square, U64 occupancy);
     inline U64 get_queen_attacks(int square, U64 occupancy);
-    inline int is_square_attacked(int square, int side);
+    inline bool is_square_attacked(int square, int side);
     inline U64 get_slider_attacks();
     inline U64 get_jumper_attacks();
     int bit_count(U64 board);
@@ -589,14 +562,15 @@ public:
     inline void generate_moves(t_moves &moves_list);
     inline void print_move_detailed(int move);
     inline int make_move(int move, int move_flag);
-    inline void perft_test(int depth);
+    inline int perft_test(int depth);
+    bool perft_test_position(const std::string &fen, int expected_result, int depth);
     int evaluate();
     inline int null_ok();
     inline int search(int maxDepth);
     inline int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
     inline int quiesence(int alpha, int beta);
     void show_sort();
-    inline int is_check();
+    inline bool is_check();
     inline int coordinate_to_square(char *coordinate);
     inline int score_move(int move);
     void sort_moves(int *moves, int num_moves);
@@ -606,7 +580,7 @@ public:
     inline void print_move(int move);
     inline void init();
     inline void test_moves_sort();
-    inline void print_moves(t_moves &moves_list);
+    void print_moves(t_moves &moves_list);
 
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
