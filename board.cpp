@@ -715,6 +715,8 @@ void Skunk::print_board() {
     std::cout << "\nCastling: " << ((castle&wk) ? 'K':'-') << ((castle&wq)?'Q':'-') << ((castle&bk)?'k':'-') << ((castle&bq)?'q':'-') << std::endl;
 
     printf("Positional score: %f\n", evaluate());
+
+    printf("Ply: %d\n", ply);
 }
 
 /*****************************\
@@ -949,27 +951,14 @@ void Skunk::generate_moves(t_moves &moves_list)
             pieces = opponent_bitboards[pinner_piece];
             while (pieces != 0) {
                 enemy_square = __builtin_ctzll(pieces);
-                if (enemy_square < 0 || enemy_square > 63) {
-                    std::cout << "enemy square is wrong" << std::endl;
-                }
 
                 if (pieces)
                 pop_lsb(pieces);
 
                 // which type of piece is it? Shoot, we need to know this to generate its attacks
                 U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1);
-
-                if (direction < 0 || direction > 8) {
-                    std::cout << "issue with direction" << std::endl;
-                }
-
-        
-                int nearest_sq = nearest_square[direction][enemy_square];
-
                 
-                if (nearest_sq < 0 || nearest_sq > 63) {
-                    std::cout << "nearest_sq is wrong" << nearest_sq << ":" << direction << ":" << enemy_square << std::endl;
-                }
+                int nearest_sq = nearest_square[direction][enemy_square];
 
                 intersection  &= rays[enemy_square][nearest_sq];
                 intersection &= king_ray;
@@ -1272,80 +1261,33 @@ void Skunk::sort_moves(int *moves, int num_moves) {
         int b_score = score_move(b);
 
         return a_score > b_score;
-
-        // // Killer move comparison
-        // bool a_is_killer = (a == killerMoves[ply][0]) || (a == killerMoves[ply][1]);
-        // bool b_is_killer = (b == killerMoves[ply][0]) || (b == killerMoves[ply][1]);
-
-        // if (a_is_killer != b_is_killer) {
-        //     return a_is_killer;
-        // }
-
-        // // History heuristic comparison
-        // int a_history = history_table[decode_piece(a)][decode_destination(a)];
-        // int b_history = history_table[decode_piece(b)][decode_destination(b)];
-        
-        // // Sort moves based on the score_move function first, and then killer/history heuristics
-        // if (a_score != b_score) {
-        //     return a_score > b_score;
-        // } else {
-        //     return a_history > b_history;
-        // }
-
     });
-
-    // /****************************************\
-    //  *             SCORE MOVES
-    // \****************************************/
-    // // do an insertion sort for best-case O(n) time
-    // int scores[moves_list.count];
-    // // compute the scores for each move
-    // for (int i=0; i<moves_list.count; i++) {
-    //     scores[i] = score_move(moves_list.moves[i]);
-    // }
-
-    // /****************************************\
-    //  *             INSERTION SORT
-    // \****************************************/
-    // for (int i=1; i<moves_list.count; i++) {
-    //     int score = scores[i];
-    //     int move = moves_list.moves[i];
-
-    //     int j = i - 1;
-    //     while (j >= 0 && scores[j] < score) {
-    //         scores[j+1] = scores[j];
-    //         moves_list.moves[j+1] = moves_list.moves[j];
-    //         j --;
-    //     }
-    //     scores[j + 1] = score;
-    //     moves_list.moves[j + 1] = move;
-    // }
 }
 
 int Skunk::score_move(int move) {
 
     int score = 0;
 
-    // check if the move exists in the previous search results
-    if (ply < previous_pv_line.cmove && move == previous_pv_line.argmove[ply]) {
-        score += 20000;
+    // look for move in previous pv line
+    for (int i = 0; i < previous_pv_line.cmove; ++i) {
+        if (move == previous_pv_line.argmove[i]) {
+            score += 20000 - (i * 100);
+        }
     }
-
+   
     // consult the lookup table
     int piece = decode_piece(move);
     int destination = decode_destination(move);
     int victim = get_piece(destination);
     
-
-    // score += square_scores[piece % 6][destination];
-
     if (decode_promoted(move)) {
         // we want to check promotions high as well
         score += 5000;
     }
 
+    // if it is a capture, use a piece victim lookup table
     if (is_capture(move)) {
-        score += mvv_lva[piece][victim] + 10000;
+        score += mvv_lva[piece][victim] * 100;
     } 
 
 #ifdef KILLER_HISTORY

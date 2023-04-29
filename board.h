@@ -37,22 +37,6 @@
 // killer history
 #define KILLER_HISTORY
 
-/*
-WITH KILLER_HISTORY
-info transpositions 11855 score cp -88 depth 8 nodes 314424 time 662 pv b1c3 b7b6 d2d4 b8c6 d4d5 c6b4 d1d4 b4d5 
-info transpositions 27587 score cp -79 depth 9 nodes 861860 time 1796 pv b1c3 d7d5 e2e3 b8c6 e2e3 a7a6 e3e4 d5e4 c3e4 
-info transpositions 90769 score cp -118 depth 10 nodes 2657126 time 5241 pv b1c3 d7d5 e2e3 c7c6 d1f3 g8f6 f3f4 d8b6 g1f3 b6b2 
-bestmove b1c3
-*/
-
-/*
-WITHOUT KILLER_HISTORY
-info transpositions 19027 score cp -86 depth 8 nodes 361830 time 506 pv b1c3 b7b6 d2d4 b8c6 g1f3 d7d5 d4d5 
-info transpositions 110942 score cp -80 depth 9 nodes 2548046 time 3585 pv b1c3 e7e6 e2e4 d8f6 d2d3 f6d4 c1f4 b8c6 
-info transpositions 183206 score cp -88 depth 10 nodes 4212742 time 6039 pv b1c3 e7e6 e2e4 d8f6 d2d4 f8b4 e4e5 f6f5 f1c4 f5c2 
-bestmove b1c3
-*/
-
 // flag for enabling futility pruning in quiescence search
 #define FUTILITY_PRUNE
 
