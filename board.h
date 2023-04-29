@@ -41,7 +41,8 @@
 #define FUTILITY_PRUNE
 
 // flag for verified null move pruning
-// #define VERIFIED_NULL_MOVE
+
+#define VERIFIED_NULL_MOVE
 
 // alpha beta flag
 #define ALPHA_BETA
@@ -613,7 +614,8 @@ public:
     void parse_option(char *command);
     void parse_debug(char *command);
     void parse_perft(const std::string& move_string);
-
+    bool should_do_null_move();
+    size_t null_move_pruned = 0;
     char *fen_start = (char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;
     int wtime = 0;
