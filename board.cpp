@@ -599,7 +599,7 @@ U64 Skunk::get_queen_attacks(int square, U64 occupancy) {
 }
 
 // is square current given attacked by the current given side
-int Skunk::is_square_attacked(int square, int side)
+bool Skunk::is_square_attacked(int square, int side)
 {
 #ifdef DEBUG
     if (side != 0 && side != 1) {
@@ -611,28 +611,28 @@ int Skunk::is_square_attacked(int square, int side)
 #endif
 
     // attacked by white pawns
-    if ((side == white) && (pawn_masks[black][square] & bitboards[P])) return 1;
+    if ((side == white) && (pawn_masks[black][square] & bitboards[P])) return true;
 
     // attacked by black pawns
-    if ((side == black) && (pawn_masks[white][square] & bitboards[p])) return 1;
+    if ((side == black) && (pawn_masks[white][square] & bitboards[p])) return true;
 
     // attacked by knights
-    if (knight_masks[square] & ((side == white) ? bitboards[N] : bitboards[n])) return 1;
+    if (knight_masks[square] & ((side == white) ? bitboards[N] : bitboards[n])) return true;
 
     // attacked by bishops
-    if (get_bishop_attacks(square, occupancies[both]) & ((side == white) ? bitboards[B] : bitboards[b])) return 1;
+    if (get_bishop_attacks(square, occupancies[both]) & ((side == white) ? bitboards[B] : bitboards[b])) return true;
 
     // attacked by rooks
-    if (get_rook_attacks(square, occupancies[both]) & ((side == white) ? bitboards[R] : bitboards[r])) return 1;
+    if (get_rook_attacks(square, occupancies[both]) & ((side == white) ? bitboards[R] : bitboards[r])) return true;
 
     // attacked by bishops
-    if (get_queen_attacks(square, occupancies[both]) & ((side == white) ? bitboards[Q] : bitboards[q])) return 1;
+    if (get_queen_attacks(square, occupancies[both]) & ((side == white) ? bitboards[Q] : bitboards[q])) return true;
 
     // attacked by kings
-    if (king_masks[square] & ((side == white) ? bitboards[K] : bitboards[k])) return 1;
+    if (king_masks[square] & ((side == white) ? bitboards[K] : bitboards[k])) return true;
 
     // by default return false
-    return 0;
+    return false;
 }
 
 /*****************************\
@@ -842,16 +842,22 @@ void Skunk::generate_moves(t_moves &moves_list)
     \******************************************/
 
     // get the right pieces
-    int pawn = P, knight=N, bishop=B, rook=R, queen=Q, king=K;
-    U64 *opponent_bitboards=bitboards+6;
+    int pawn, knight, bishop, rook, queen, king;
+    U64 *opponent_bitboards;
     if (side == black) {
         pawn = p, knight=n, bishop=b, rook=r, queen=q, king=k;
         opponent_bitboards=bitboards;
+    } else {
+        pawn = P, knight=N, bishop=B, rook=R, queen=Q, king=K;
+        opponent_bitboards=bitboards+6;
+    }
+
+    if (bitboards[K] == 0 || bitboards[k] == 0) {
+        std::cout << "KING IS OFF OF THE BOARD" << std::endl;
     }
 
     int king_square = __builtin_ctzll(bitboards[king]);
     
-    if (king_square)
     pop_bit(occupancies[both], king_square);
     attack_sliders = get_slider_attacks();
     attack_jumpers = get_jumper_attacks();
@@ -941,12 +947,33 @@ void Skunk::generate_moves(t_moves &moves_list)
             pinner_piece = pinner_pieces[piece_index];
 
             pieces = opponent_bitboards[pinner_piece];
-            while (pieces) {
+            while (pieces != 0) {
                 enemy_square = __builtin_ctzll(pieces);
+                if (enemy_square < 0 || enemy_square > 63) {
+                    std::cout << "enemy square is wrong" << std::endl;
+                }
+
+                if (pieces)
                 pop_lsb(pieces);
 
                 // which type of piece is it? Shoot, we need to know this to generate its attacks
-                U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1) & rays[enemy_square][nearest_square[direction][enemy_square]] & king_ray;
+                U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1);
+
+                if (direction < 0 || direction > 8) {
+                    std::cout << "issue with direction" << std::endl;
+                }
+
+                
+
+
+                int nearest_sq = nearest_square[direction][enemy_square];
+
+                
+                if (nearest_sq < 0 || nearest_sq > 63) {
+                    std::cout << "nearest_sq is wrong" << std::endl;
+                }
+                intersection  &= rays[enemy_square][nearest_sq];
+                intersection &= king_ray;
                 intersection &= occupancies[side];
                 // if there is no pinned piece, do not try and pop a bit off...just return early here (happens more often than not)
                 if (intersection == 0) {
@@ -987,8 +1014,6 @@ void Skunk::generate_moves(t_moves &moves_list)
     if (enpassant != no_square) {
         filtered_capture_mask |= (1ULL << enpassant);
         filtered_push_mask |= (1ULL << enpassant);
-        // print_bitboard(filtered_capture_mask);
-        // print_bitboard(filtered_push_mask);
     }
 
     pieces = unpinned_pieces[pawn];
@@ -1309,9 +1334,11 @@ int Skunk::score_move(int move) {
 
     // consult the lookup table
     int piece = decode_piece(move);
-    int victim = get_piece(decode_destination(move));
+    int destination = decode_destination(move);
+    int victim = get_piece(destination);
+    
 
-
+    // score += square_scores[piece % 6][destination];
 
     if (decode_promoted(move)) {
         // we want to check promotions high as well
@@ -1337,7 +1364,7 @@ int Skunk::score_move(int move) {
     return score;
 }
 
-int Skunk::is_check() {
+bool Skunk::is_check() {
     return is_square_attacked(__builtin_ctzll(bitboards[side==white?K:k]), side^1);
 }
 
@@ -1456,14 +1483,15 @@ TTEntry *Skunk::probe_transposition_table(U64 zobristKey) {
 // new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
     nodes++;
-
+    int null_move_score;
+    bool fail_high = false, check=false;
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
 
     if (force_stop) return 0;
 
-    int check = is_check();
+    check = is_check();
 
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
@@ -1507,17 +1535,17 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
 
 
-
-        // Verified null move and other code here...
+    // Verified null move and other code here...
+    // NULL move implemented from: https://arxiv.org/pdf/0808.1125.pdf
 #ifdef VERIFIED_NULL_MOVE
-    if (!check && (depth > 1 || !verify) && do_null == DO_NULL) {
+    if (!check && do_null == DO_NULL && (!verify || depth > 1)) {
+
         // Save the current board state
         copy_board();
 
-        // Make a null move
+        // Make a null move (switch sides without moving a piece)
         side ^= 1;
         zobrist ^= side_key;
-
         if (enpassant != no_square) {
             zobrist ^= enpassant_keys[enpassant];
         }
@@ -1526,32 +1554,28 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         // Increase the ply
         ply++;
 
+        
         // Perform a reduced-depth search with the null move
-        int null_move = -negamax(-beta, -beta + 1, depth - NULL_R, verify, NO_NULL, nullptr);
+        null_move_score = -negamax(-beta, -beta + 1, depth - 1 - NULL_R, verify, NO_NULL, nullptr);
 
         // Decrease the ply and restore the previous board state
         ply--;
         restore_board();
 
         // Check if the null move caused a beta-cutoff
-        if (null_move >= beta) {
+        if (null_move_score >= beta) {
+
             if (verify) {
-                verify = 0;
-                depth--;
+                depth --;
+                verify = false;
+                fail_high = true;
             } else {
-                /*
-                info transpositions 123589 ttp: 0.0772 score cp -103 depth 8 nodes 1600156 q_nodes 1503679 time 2051 pv h4f2 e3d3 h2h3 d3c4 h3h4 c4b3 f2b6 c3b5 b6b5 b3c3 b8e5 c3d2 e5f4 d2c3 f4c1 
-                bestmove h4f2
-                */
-                return null_move;
+                return null_move_score;
             }
         }
     }
 #endif
-    /*
-    info transpositions 94278 ttp: 0.1047 score mate 1073491823 depth 9 nodes 900073 q_nodes 376163 time 2028 pv 
-bestmove e2a6
-*/
+
     copy_board();
 
     for (int i = 0; i < moves_list.count; i++) {
@@ -1560,6 +1584,7 @@ bestmove e2a6
         ply++;
         repitition.table[repitition.count++] = zobrist;
 
+        re_search:
         if (i == 0) {
             current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
         } else {
@@ -1597,6 +1622,14 @@ bestmove e2a6
                 memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                 pline->cmove = line.cmove + 1;
             }
+        }
+
+        // null move verification re-check if not beta cuttoff was found
+        if (fail_high && current_score < beta) {
+            depth ++;
+            fail_high = false;
+            verify = true;
+            goto re_search;
         }
 
         if (alpha >= beta) {
@@ -2112,11 +2145,11 @@ void Skunk::parse_position(const std::string& command) {
 int Skunk::parse_move(const std::string& move_string) {
     t_moves moves;
     generate_moves(moves);
-
     if (move_string.length() < 4) return 0;
 
     int source = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8;
     int target = (move_string[2] - 'a') + (8 - (move_string[3] - '0')) * 8;
+
     for (int i=0; i<moves.count; i++) {
         int move = moves.moves[i];
         if (decode_source(move)==source && decode_destination(move)==target) {
@@ -2146,35 +2179,72 @@ void Skunk::parse_perft(const std::string& command) {
     perft_test(depth);
 }
 
-int Skunk::perft_test(int depth) {
-    printf("Starting PERFT test...\n");
-    memset(&perft_results, 0, sizeof(perft));
 
-    perft_results.total_nodes = 0;
+int Skunk::perft_test(int depth) {
+    
+    nodes = 0;
+
+    t_moves moves;
+    generate_moves(moves);
+
     auto start = std::chrono::steady_clock::now();
-    perft_test_helper(depth);
+
+    for (int i=0; i<moves.count; i++) {
+        copy_board();
+
+        make_move(moves.moves[i], all_moves);
+
+        int cummulative_nodes = nodes;
+
+        perft_test_helper(depth - 1);
+
+        // old nodes
+        int old_nodes = nodes - cummulative_nodes;
+
+        restore_board();
+
+        printf("%s%s%c %d\n", 
+            square_to_coordinate[decode_source(moves.moves[i])],
+            square_to_coordinate[decode_destination(moves.moves[i])],
+            decode_promoted(moves.moves[i]) ? char_pieces[(decode_promoted(moves.moves[i]) % 6) + 6] : ' ',
+            old_nodes);
+        // std::cout << square_to_coordinate[decode_source(moves.moves[i])] << square_to_coordinate[decode_destination(moves.moves[i])] << (decode_promoted(moves.moves[i]) ? char_pieces[(decode_promoted(moves.moves[i]) % 6) + 6] : ' ') << " " << old_nodes << std::endl;;
+
+    }
+
     auto end = std::chrono::steady_clock::now();
 
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    std::cout << std::endl <<  nodes << std::endl;
+    
+    // printf("Starting PERFT test...\n");
+    // memset(&perft_results, 0, sizeof(perft));
 
-    int per_second = -1;
-    if (elapsed > 0) {
-        per_second = perft_results.total_nodes/elapsed;
-    }
+    // perft_results.total_nodes = 0;
+    // auto start = std::chrono::steady_clock::now();
+    // perft_test_helper(depth);
+    // auto end = std::chrono::steady_clock::now();
 
-    printf("%-10s\t%-10s\t%-10s\t%-10s\t%-10s\t%-10s\n", "depth", "nodes", "captures", "enpassants", "castles", "promoted");
+    // auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 
-    for (int i=depth; i>=0; i--) {
-        printf("%-10d\t%-10d\t%-10d\t%-10d\t%-10d\t%-10d\n",
-               depth - i,
-               perft_results.nodes[i+1],
-               perft_results.captures[i+1],
-               perft_results.enpassants[i+1],
-               perft_results.castles[i+1],
-               perft_results.promotions[i+1]);
-    }
-    printf("Nodes: %lld\nTime: %d\nNPS: %d\n", perft_results.total_nodes, elapsed, per_second*1000);
-    return perft_results.nodes[1];
+    // int per_second = -1;
+    // if (elapsed > 0) {
+    //     per_second = perft_results.total_nodes/elapsed;
+    // }
+
+    // printf("%-10s\t%-10s\t%-10s\t%-10s\t%-10s\t%-10s\n", "depth", "nodes", "captures", "enpassants", "castles", "promoted");
+
+    // for (int i=depth; i>=0; i--) {
+    //     printf("%-10d\t%-10d\t%-10d\t%-10d\t%-10d\t%-10d\n",
+    //            depth - i,
+    //            perft_results.nodes[i+1],
+    //            perft_results.captures[i+1],
+    //            perft_results.enpassants[i+1],
+    //            perft_results.castles[i+1],
+    //            perft_results.promotions[i+1]);
+    // }
+    // printf("Nodes: %lld\nTime: %d\nNPS: %d\n", perft_results.total_nodes, elapsed, per_second*1000);
+    // return perft_results.nodes[1];
 }
 
 bool Skunk::perft_test_position(const std::string &fen, int expected_result, int depth) {
@@ -2187,63 +2257,78 @@ bool Skunk::perft_test_position(const std::string &fen, int expected_result, int
     }
         
     std::cout << "\tFailed (result was " << result << ", expected was "<< expected_result << ")"  << std::endl;
+    exit(0);
     return false;
 }
 
 
 void Skunk::perft_test_helper(int depth) {
-
-    if (depth < 1) return;
-
-    t_moves new_moves;
-    t_moves psuedo;
-    t_moves valid = {.count = 0};
-
-    generate_moves(new_moves);
-
-    copy_board();
-    int made_moves = 0;
-    for (int move_count = 0; move_count < new_moves.count; move_count++) {
-
-        int  move = new_moves.moves[move_count];
-
-        if (is_capture(move)) {
-            perft_results.captures[depth]++;
-        }
-        if (decode_enpassant(move)) {
-
-            perft_results.enpassants[depth] ++;
-        }
-        if (decode_castle(move)) {
-            perft_results.castles[depth] ++;
-        }
-        if (decode_promoted(move)) {
-            perft_results.promotions[depth] ++;
-        }
-
-        make_move(move, all_moves);
-
-
-        valid.moves[valid.count++] = move;
-
-#ifdef DEBUG
-        assert(zobrist == generate_zobrist());
-#endif
-
-        perft_results.nodes[depth] ++;
-        perft_results.total_nodes ++;
-        perft_test_helper(depth - 1);
-
-
-        restore_board();
+    if (depth == 0) {
+        nodes ++;
+        return;
     }
 
-    // move counts differ
-//    if (valid.count != new_moves.count) {
-//        printf("Move count differ (%d to %d)\n", valid.count, new_moves.count);
-//        print_board();
-//        getchar();
-//    }
+    t_moves moves;
+    generate_moves(moves);
+
+    for (int move_count = 0; move_count < moves.count; move_count ++) {
+        copy_board();
+        make_move(moves.moves[move_count], all_moves);
+        perft_test_helper(depth - 1);
+        restore_board();
+    }
+    
+//     if (depth < 1) return;
+
+//     t_moves new_moves;
+//     t_moves psuedo;
+//     t_moves valid = {.count = 0};
+
+//     generate_moves(new_moves);
+
+//     copy_board();
+//     int made_moves = 0;
+//     for (int move_count = 0; move_count < new_moves.count; move_count++) {
+
+//         int  move = new_moves.moves[move_count];
+
+//         if (is_capture(move)) {
+//             perft_results.captures[depth]++;
+//         }
+//         if (decode_enpassant(move)) {
+
+//             perft_results.enpassants[depth] ++;
+//         }
+//         if (decode_castle(move)) {
+//             perft_results.castles[depth] ++;
+//         }
+//         if (decode_promoted(move)) {
+//             perft_results.promotions[depth] ++;
+//         }
+
+//         make_move(move, all_moves);
+
+
+//         valid.moves[valid.count++] = move;
+
+// #ifdef DEBUG
+//         assert(zobrist == generate_zobrist());
+// #endif
+
+//         perft_results.nodes[depth] ++;
+//         perft_results.total_nodes ++;
+//         perft_test_helper(depth - 1);
+
+
+//         restore_board();
+//     }
+
+//     // move counts differ
+// //    if (valid.count != new_moves.count) {
+// //        printf("Move count differ (%d to %d)\n", valid.count, new_moves.count);
+// //        print_board();
+// //        getchar();
+// //    }
 }
 
 int Skunk::is_repetition() {

@@ -5,6 +5,7 @@
 #ifndef BITBOT_BOARD_H
 #define BITBOT_BOARD_H
 
+#include <time.h>
 #include <stdint.h>
 #include <string.h>
 #include <climits>
@@ -34,7 +35,7 @@
 #define HASH_SIZE (1 << 20)
 
 // flag for enabling futility pruning in quiescence search
-#define FUTILITY_PRUNE
+// #define FUTILITY_PRUNE
 
 // flag for verified null move pruning
 #define VERIFIED_NULL_MOVE
@@ -532,7 +533,7 @@ public:
     TTEntry *probe_transposition_table(U64 zobristKey);
     void store_transposition_table(U64 zobristKey, int16_t value, int16_t depth, int move, NodeType type);
 
-
+    int get_time_ms();
     inline int is_repetition();
     void init_precomputed_masks();
     U64 pawn_attack_span(int color, int square);
@@ -546,7 +547,7 @@ public:
     inline U64 get_rook_attacks(int square, U64 occupancy);
     inline U64 get_bishop_attacks(int square, U64 occupancy);
     inline U64 get_queen_attacks(int square, U64 occupancy);
-    inline int is_square_attacked(int square, int side);
+    inline bool is_square_attacked(int square, int side);
     inline U64 get_slider_attacks();
     inline U64 get_jumper_attacks();
     int bit_count(U64 board);
@@ -564,7 +565,7 @@ public:
     inline int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
     inline int quiesence(int alpha, int beta);
     void show_sort();
-    inline int is_check();
+    inline bool is_check();
     inline int coordinate_to_square(char *coordinate);
     inline int score_move(int move);
     void sort_moves(int *moves, int num_moves);
