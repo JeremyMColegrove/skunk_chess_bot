@@ -1447,13 +1447,12 @@ bool Skunk::should_do_null_move() {
 // new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
     
-    int check,best_move = 0, current_move, best_score = -INT_MAX, current_score;
-    bool fail_high = false;
+    int best_move = 0, current_move, best_score = -INT_MAX, current_score, null_move_score;
+    bool fail_high = false, check=false;
     t_line line = {.cmove = 0};
     
     nodes++;
-    int null_move_score;
-    bool fail_high = false, check=false;
+
 
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
@@ -1461,7 +1460,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     if (force_stop) return 0;
 
-    check = is_check();
+    
 
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
@@ -1471,6 +1470,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     if (ply && is_repetition()) {
         return 0;
     }
+    
     #ifdef TRANSPOSITION_TABLE
         TTEntry *entry = probe_transposition_table(zobrist);
         if (entry != nullptr && entry->depth >= depth) {
@@ -1494,12 +1494,13 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
     #endif
 
-    check = is_check();
 
     t_moves moves_list;
     moves_list.count = -1;
     generate_moves(moves_list);
     sort_moves(moves_list.moves, moves_list.count);
+
+    check = is_check();
 
     if (moves_list.count == 0) {
         return check ? (-CHECKMATE) + ply : 0;
