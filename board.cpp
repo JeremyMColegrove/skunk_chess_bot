@@ -1135,10 +1135,6 @@ void Skunk::generate_moves(t_moves &moves_list)
             moves_list.contains_castle = 1;
         }
     }
-
-
-
-
 }
 
 int Skunk::get_piece(int square) {
@@ -1264,6 +1260,69 @@ void Skunk::sort_moves(int *moves, int num_moves) {
     });
 }
 
+int Skunk::see(int move) {
+    int from = decode_source(move);
+    int to = decode_destination(move);
+    int attacked_piece = get_piece(from);
+    int attacked_value = piece_scores[attacked_piece];
+    int victim = get_piece(to);
+    int victim_value = piece_scores[victim];
+
+    // If the move is not a capture or the captured piece is more valuable, no need to perform SEE
+    if (victim_value == 0 || attacked_value <= victim_value) {
+        return victim_value - attacked_value;
+    }
+
+    // Temporary board to perform SEE calculation
+    copy_board();
+
+    // Perform the capture
+    make_move(move, all_moves);
+
+    // Recursively calculate the SEE value
+    int see_value = victim_value - see(get_smallest_attacker(to));
+
+    // Restore the original board
+    restore_board();
+
+    return see_value;
+}
+
+int Skunk::get_smallest_attacker(int to) {
+    // This function returns the move of the smallest attacker to the square 'to'
+    // Generate all moves for the opponent's pieces
+    t_moves moves_list;
+    moves_list.count = -1;
+    generate_moves(moves_list);
+
+    int smallest_attacker_value = INT_MAX;
+    int smallest_attacker_move = 0;
+
+    for (int i = 0; i < moves_list.count; i++) {
+        int move = moves_list.moves[i];
+
+        // Check if the move is a capture and the destination is the target square
+        if (is_capture(move) && decode_destination(move) == to) {
+            int attacker_piece = get_piece(decode_source(move));
+            int attacker_value = piece_scores[attacker_piece];
+
+            // Update the smallest attacker if the current attacker has a lower value
+            if (attacker_value < smallest_attacker_value) {
+                smallest_attacker_value = attacker_value;
+                smallest_attacker_move = move;
+            }
+        }
+    }
+
+    // If there is no attacker, return 0
+    if (smallest_attacker_value == INT_MAX) {
+        return 0;
+    }
+
+    return smallest_attacker_move;
+}
+
+
 int Skunk::score_move(int move) {
 
     int score = 0;
@@ -1286,9 +1345,17 @@ int Skunk::score_move(int move) {
     }
 
     // if it is a capture, use a piece victim lookup table
+    // if (is_capture(move)) {
+    //     score += mvv_lva[piece][victim] * 100;
+    // } 
+
+    // if it is a capture, use a piece victim lookup table
     if (is_capture(move)) {
         score += mvv_lva[piece][victim] * 100;
-    } 
+        // Adjust capture score based on SEE value
+        int see_value = see(move);
+        score += see_value * 10;
+    }
 
 #ifdef KILLER_HISTORY
     // Killer moves
@@ -1446,21 +1513,17 @@ bool Skunk::should_do_null_move() {
 
 // new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
-    
     int best_move = 0, current_move, best_score = -INT_MAX, current_score, null_move_score;
-    bool fail_high = false, check=false;
+    bool fail_high = false, check = false;
     t_line line = {.cmove = 0};
-    
-    nodes++;
 
+    nodes++;
 
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
     }
 
     if (force_stop) return 0;
-
-    
 
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
@@ -1470,10 +1533,11 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     if (ply && is_repetition()) {
         return -evaluate() * 0.25;
     }
-    
-    #ifdef TRANSPOSITION_TABLE
-        TTEntry *entry = probe_transposition_table(zobrist);
-        if (entry != nullptr && entry->depth >= depth) {
+
+    // Transposition table lookup
+    TTEntry *entry = probe_transposition_table(zobrist);
+    if (entry != nullptr && !verify) {
+        if (entry->depth >= depth) {
             if (entry->type == EXACT) {
                 cache_hit++;
                 if (ply == 0 && pline != nullptr) {
@@ -1492,8 +1556,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 return entry->value;
             }
         }
-    #endif
-
+    }
 
     t_moves moves_list;
     moves_list.count = -1;
@@ -1508,18 +1571,9 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     if (check) depth++;
 
-
-
-    // Verified null move and other code here...
-    // NULL move implemented from: https://arxiv.org/pdf/0808.1125.pdf
-#ifdef VERIFIED_NULL_MOVE
+    // Null move pruning
     if (!check && do_null == DO_NULL && (!verify || depth > 1)) {
-
-
-        // Save the current board state
         copy_board();
-
-        // Make a null move (switch sides without moving a piece)
         side ^= 1;
         zobrist ^= side_key;
         if (enpassant != no_square) {
@@ -1527,23 +1581,16 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
         enpassant = no_square;
 
-        // Increase the ply
         ply++;
 
-        
-        // Perform a reduced-depth search with the null move
         null_move_score = -negamax(-beta, -beta + 1, depth - 1 - NULL_R, verify, NO_NULL, nullptr);
 
-
-        // Decrease the ply and restore the previous board state
         ply--;
         restore_board();
 
-        // Check if the null move caused a beta-cutoff
         if (null_move_score >= beta) {
-
             if (verify) {
-                depth --;
+                depth--;
                 verify = false;
                 fail_high = true;
             } else {
@@ -1551,7 +1598,6 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             }
         }
     }
-#endif
 
     copy_board();
     int searched_moves = 0;
@@ -1563,19 +1609,20 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         repitition.table[repitition.count++] = zobrist;
 
         re_search:
-        if (searched_moves >= LMR_DEPTH && depth >= LMR_MIN_DEPTH && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
-            // Apply LMR
-            current_score = -negamax(-alpha - 1, -alpha, depth - 1 - LMR_REDUCTION, verify, NO_NULL, &line);
-
-            if (current_score > alpha && current_score < beta) {
-                // Re-search with full depth, as the move is better than expected
-                current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
-            }
+        // Apply PVS and LMR
+        if (searched_moves == 0) {
+            current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
         } else {
-            // Apply PVS
-            if (searched_moves == 0) {
-                current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+            if (searched_moves >= LMR_DEPTH && depth >= LMR_MIN_DEPTH && !check && !is_capture(current_move) && decode_promoted(current_move) == 0) {
+                // Apply LMR
+                current_score = -negamax(-alpha - 1, -alpha, depth - 1 - LMR_REDUCTION, verify, NO_NULL, &line);
+
+                if (current_score > alpha && current_score < beta) {
+                    // Re-search with full depth, as the move is better than expected
+                    current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+                }
             } else {
+                // Apply PVS
                 current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, &line);
 
                 if (current_score > alpha && current_score < beta) {
@@ -1585,15 +1632,15 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             }
         }
 
-        // check for best score and move
+        // Check for best score and move
         if (current_score > best_score) {
             best_score = current_score;
             best_move = current_move;
         }
 
-        // null move verification re-check if not beta cuttoff was found
+        // Null move verification re-check if no beta cut-off was found
         if (fail_high && current_score < beta) {
-            depth ++;
+            depth++;
             fail_high = false;
             verify = true;
             goto re_search;
@@ -1611,25 +1658,26 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 pline->argmove[0] = current_move;
                 memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                 pline->cmove = line.cmove + 1;
-            }        
-
-        if (alpha >= beta) {
-            // Update killer moves and history here...
-#ifdef KILLER_HISTORY
-            if (!is_capture(current_move) && ply < MAX_PLY) {
-                update_heuristics(ply, current_move, depth);
             }
-#endif
 
-    #ifdef TRANSPOSITION_TABLE
+            if (alpha >= beta) {
+                // Update killer moves and history here...
+                #ifdef KILLER_HISTORY
+                if (!is_capture(current_move) && ply < MAX_PLY) {
+                    update_heuristics(ply, current_move, depth);
+                }
+                #endif
+
+                #ifdef TRANSPOSITION_TABLE
                 store_transposition_table(zobrist, beta, depth, best_move, LOWER_BOUND);
-    #endif  
+                #endif
                 return beta;
             }
         }
     }
 
-#ifdef TRANSPOSITION_TABLE
+    // Transposition table store
+    #ifdef TRANSPOSITION_TABLE
     NodeType type;
     if (best_score <= alpha) {
         type = UPPER_BOUND;
@@ -1638,12 +1686,13 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     } else {
         type = EXACT;
     }
-    store_transposition_table(zobrist, best_score, depth, best_move, type);    
-#endif
+    store_transposition_table(zobrist, best_score, depth, best_move, type);
+    #endif
 
-    
     return best_score;
 }
+
+
 
 
 

@@ -607,6 +607,7 @@ public:
 
 
     // UCI commands/helper functions
+
     void communicate();
     int parse_move(const std::string& move_string);
     void parse_position(const std::string& command);
@@ -615,6 +616,8 @@ public:
     void parse_debug(char *command);
     void parse_perft(const std::string& move_string);
     bool should_do_null_move();
+    int see(int move);
+    int get_smallest_attacker(int to);
     size_t null_move_pruned = 0;
     char *fen_start = (char *)"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     int force_stop = 0;
