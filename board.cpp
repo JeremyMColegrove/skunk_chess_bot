@@ -821,29 +821,21 @@ U64 Skunk::get_jumper_attacks() {
     return jumpers;
 }
 
+inline bool Skunk::is_promotion_square(int square, int side) {
+    if (side == black) {
+        return (square >= 56 && square <= 63);
+    } else {
+        return (square >= 0 && square <= 7);
+    }
+}
 
-
-// generate all t_moves
-void Skunk::generate_moves(t_moves &moves_list)
+// generate all moves in list
+vector<int> Skunk::generate_moves()
 {
-    // the goal of this move generator is to use the least branching possible, even at the cost of calculation
-
-    // gets the attacked squares that the other side is attacking
-    // init move count
-    moves_list.count = 0;
-
-    // init variables
-    // try and leverage faster registers by using one variable, trying to keep this variable in reg rather than swapping for each piece
-    U64 pieces = 0ULL;
-    U64 attacked_squares, attack_sliders, attack_jumpers;
+    std::vector<int> moves;
     int square;
-    /******************************************\
-     *
-     *                  KING MOVES
-     *
-    \******************************************/
 
-    // get the right pieces
+    // get the right pieces (for easier lookup later)
     int pawn, knight, bishop, rook, queen, king;
     U64 *opponent_bitboards;
     if (side == black) {
@@ -854,287 +846,86 @@ void Skunk::generate_moves(t_moves &moves_list)
         opponent_bitboards=bitboards+6;
     }
 
-    if (bitboards[K] == 0 || bitboards[k] == 0) {
-        std::cout << "KING IS OFF OF THE BOARD" << std::endl;
-    }
-
+    //KING MOVES
+    U64 empty_squares = ~occupancies[side];
     int king_square = __builtin_ctzll(bitboards[king]);
-    
-    pop_bit(occupancies[both], king_square);
-    attack_sliders = get_slider_attacks();
-    attack_jumpers = get_jumper_attacks();
-    attacked_squares = attack_jumpers | attack_sliders;
-    set_bit(occupancies[both], king_square);
+    U64 king_moves = king_masks[king_square] & empty_squares;
 
-    pieces = king_masks[__builtin_ctzll(bitboards[king])] & ~occupancies[side] & ~attacked_squares;
     // get all of the destinations for the king
-    while (pieces) {
-        square = __builtin_ctzll(pieces);
+    while (king_moves) {
+        square = __builtin_ctzll(king_moves);
         // encode the move
-        moves_list.moves[moves_list.count++] = encode_move(__builtin_ctzll(bitboards[king]), square, king, 0, 0, 0);
-        pop_lsb(pieces);
-    }
-
-    /******************************************\
-     *
-     *             INIT OTHER MOVES
-     *
-    \******************************************/
-
-    // generate the attacked squares as normal after the king is done
-    attack_sliders = get_slider_attacks();
-    attack_jumpers = get_jumper_attacks();
-    attacked_squares = attack_jumpers | attack_sliders;
-
-
-    // calculate the capture mask (if a piece is giving check, a valid move is capturing the piece)
-
-    U64 capture_mask = 0ULL;
-    U64 push_mask    = 0ULL;
-
-    // get a bitboard with all attackers that have king in check on them
-    // do pawn first
-    capture_mask |= get_bishop_attacks(king_square, occupancies[both]) & (opponent_bitboards[B] | opponent_bitboards[Q]);
-    capture_mask |= get_rook_attacks(king_square, occupancies[both]) & (opponent_bitboards[R] | opponent_bitboards[Q]);
-
-    // here we have our slider pieces, we can use these to fill our push mask before adding other pieces
-    U64 sliders = capture_mask;
-    while (sliders) {
-        square = __builtin_ctzll(sliders);
-        push_mask |= rays[square][king_square];
-        pop_lsb(sliders);
+        moves.push_back(encode_move(king_square, square, king, 0, 0, 0));
+        pop_lsb(king_moves);
     }
 
 
-    capture_mask |= knight_masks[king_square] & opponent_bitboards[N];
-    capture_mask |= pawn_masks[side][king_square] & opponent_bitboards[P];
+    // PAWN MOVES
+    U64 pawns = bitboards[pawn];
+    while (pawns) {
+        square = __builtin_ctzll(pawns);
 
+        U64 pawn_moves = get_attacks(pawn, square, side);
 
-    // if no pieces are checking the king, then any move on the board is a valid move and we do not check for early escape
-    if (capture_mask == 0 && push_mask == 0) {
-        capture_mask = 0xFFFFFFFFFFFFFFFF;
-        push_mask = 0xFFFFFFFFFFFFFFFF;
-
-    } else {
-        // the capture mask contains how many pieces are checking the king.
-        // //If more than one piece, the only valid moves are king moves. We can escape early here.
-        int count = __builtin_popcountll(capture_mask); 
-
-        if (count > 1) {
-            return;
-        }
-    }
-    // print_bitboard(push_mask);
-    /******************************************\
-     *
-     *              PINNED PIECES
-     *
-    \******************************************/
-
-    // calculate pinned pieces first and remove them from the board for further move generation
-    U64 unpinned_pieces[12];
-    memcpy(unpinned_pieces, bitboards, 12 * sizeof(U64));
-
-    // make king a slider piece, and detect intersection with opponent sliding enemy_attacks. Then, any piece on those intersections is pinned
-    U64 slider_king = get_bishop_attacks(king_square, occupancies[both]) | get_rook_attacks(king_square, occupancies[both]);
-    int pinner_pieces[] = {R, B, Q};
-    int pinner_piece, enemy_square, pinned_square, piece, destination;
-    // calculate the moves for each piece in each direction
-    for (int direction=0; direction<8; direction++) {
-        // get the king ray in the opposite direction
-        U64 king_ray = slider_king & rays[king_square][nearest_square[7 - direction][king_square]];
-
-        // check pins by each type of piece
-        for (int piece_index = 0; piece_index<3; piece_index++) {
-            pinner_piece = pinner_pieces[piece_index];
-
-            pieces = opponent_bitboards[pinner_piece];
-            while (pieces != 0) {
-                enemy_square = __builtin_ctzll(pieces);
-
-                if (pieces)
-                pop_lsb(pieces);
-
-                // which type of piece is it? Shoot, we need to know this to generate its attacks
-                U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1);
-
-                int nearest_sq = nearest_square[direction][enemy_square];
-
-                intersection  &= rays[enemy_square][nearest_sq];
-                intersection &= king_ray;
-                intersection &= occupancies[side];
-                // if there is no pinned piece, do not try and pop a bit off...just return early here (happens more often than not)
-                if (intersection == 0) {
-                    continue;
-                }
-
-                // get the square that the pinned piece is on
-                pinned_square = __builtin_ctzll(intersection);
-                // get the piece type on that square
-                piece = get_piece(pinned_square);
-
-                pop_bit(unpinned_pieces[piece], pinned_square);
-//                 we are only able to move on the ray between king and enemy piece, and must move so that it can block check
-                U64 attacks = get_attacks(piece, pinned_square, side) & (rays[king_square][enemy_square] | (1ULL << enemy_square)) & (push_mask | capture_mask);
-
-//              go through each valid attack and add it to the list of moves
-                while (attacks) {
-                    destination = __builtin_ctzll(attacks);
-                    moves_list.moves[moves_list.count++] = encode_move(pinned_square, destination, piece, 0, 0, 0);
-                    pop_lsb(attacks);
-                }
-            }
-        }
-    }
-    /******************************************\
-     *
-     *              REGULAR MOVES
-     *
-    \******************************************/
-
-//    // we now are only dealing with unpinned pieces and no king movements, just plain and simple movements from here on out...
-    U64 attacks;
-
-
-    U64 filtered_capture_mask = capture_mask, filtered_push_mask = push_mask;
-
-    // do pawn attacks first
-    if (enpassant != no_square) {
-        filtered_capture_mask |= (1ULL << enpassant);
-        filtered_push_mask |= (1ULL << enpassant);
-    }
-
-    pieces = unpinned_pieces[pawn];
-    while (pieces) {
-        square = __builtin_ctzll(pieces);
-        // get this persons attacks
-
-        attacks = get_attacks(pawn, square, side) & (filtered_capture_mask | filtered_push_mask);
-
-        // add each filtered (non promotion) attack
-        U64 filtered = attacks & ~row8 & ~row1;
-
-        // filter out pawn promotions
-        while (filtered) {
-            int destination = __builtin_ctzll(filtered);
-            if (destination == enpassant) {
-                // remove both pawns from the board, check for check
-                int victim = enpassant + 8*(side==white?1:-1);
-
-                pop_bit(occupancies[both], square);
-
-                pop_bit(occupancies[both], victim);
-
-                set_bit(occupancies[both], enpassant);
-
-                // check if the king is horizontally in check by any queen or rook
-                // !!! Note Apr 28 2023, forgot to do diagonal attacks !!!
-                // include any pinned pieces in this check
-
-                // check each queen
-                int lsq = nearest_square[DW][king_square], rsq=nearest_square[DE][king_square], usq = nearest_square[DN][king_square], dsq=nearest_square[DS][king_square];
-                U64 horizontal_mask = rays[king_square][lsq] | rays[king_square][rsq] | rays[king_square][usq] | rays[king_square][dsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << usq) | (1ULL << dsq) | (1ULL << king_square);
-                U64 king_possible_pin_masks = get_queen_attacks(king_square, occupancies[both]) | (1ULL << king_square);//(rays[king_square][lsq] | rays[king_square][rsq] | rays[king_square][usq] | rays[king_square][dsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << usq) | (1ULL << dsq) | (1ULL << king_square));
-                
-
-                U64 horizontal_attackers = (opponent_bitboards[R] | opponent_bitboards[Q]) & (king_possible_pin_masks & horizontal_mask);
-                U64 diagonal_attackers = ( opponent_bitboards[B] | opponent_bitboards[Q]) & (king_possible_pin_masks & ~horizontal_mask);
-                
-                // print_bitboard(horizontal_attackers);
-                // print_bitboard(diagonal_attackers);
-                // print_bitboard(king_possible_pin_masks);
-                U64 sliders = 0ULL;
-                U64 diagonals = 0ULL;
-
-                // check if king is in attack after any enpassant moves from horizontal pieces
-                while (horizontal_attackers) {
-                    int horizontal_attacker_square = __builtin_ctzll(horizontal_attackers);
-                    sliders |= get_rook_attacks(horizontal_attacker_square, occupancies[both]);
-                    pop_lsb(horizontal_attackers);
-                }
-
-                // check if king is in attack after any enpassant moves from diagonal pieces
-                while (diagonal_attackers) {
-                    int diagonal_attacker_square = __builtin_ctzll(diagonal_attackers);
-                    diagonals |= get_bishop_attacks(diagonal_attacker_square, occupancies[both]);
-                    pop_lsb(diagonal_attackers);
-                }
-                // print_bitboard(diagonals);
-
-                // the pawn enpassant does not put the king in check by horizontal sliders
-                if (((sliders | diagonals) & bitboards[king]) == 0) {
-                    moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, 0, 1, 0);
-                }
-
-                pop_bit(occupancies[both], enpassant);
-                set_bit(occupancies[both], square);
-
-                set_bit(occupancies[both], victim);
+        while (pawn_moves) {
+            int destination = __builtin_ctzll(pawn_moves);
+            if (is_promotion_square(destination, side)) {
+                moves.push_back(encode_move(square, destination, pawn, rook, 0, 0));
+                moves.push_back(encode_move(square, destination, pawn, bishop, 0, 0));
+                moves.push_back(encode_move(square, destination, pawn, queen, 0, 0));
+                moves.push_back(encode_move(square, destination, pawn, knight, 0, 0));
+            } else if (destination == enpassant) {
+                moves.push_back(encode_move(square, destination, pawn, 0, 1, 0));
             } else {
-                moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, 0, 0, 0);
+                moves.push_back(encode_move(square, destination, pawn, 0, 0, 0));
             }
-            pop_lsb(filtered);
+            pop_lsb(pawn_moves);
         }
-        // get pawn pushes/captures onto the 8th rank
-        filtered = attacks & (row8 | row1);
-        while (filtered) {
-            int destination = __builtin_ctzll(filtered);
-            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, rook, 0, 0);
-            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, bishop, 0, 0);
-            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, queen, 0, 0);
-            moves_list.moves[moves_list.count++] = encode_move(square, destination, pawn, knight, 0, 0);
-
-            pop_lsb(filtered);
-        }
-        pop_lsb(pieces);
+        pop_lsb(pawns);
     }
 
-    // do rook, queen, bishop, and knight moves
+    // Rook, queen, bishop, and knight moves
     int regular_pieces[] = {rook, queen, bishop, knight};
+    int piece;
+    U64 attacks;
     for (int i=0; i<4; i++) {
         piece = regular_pieces[i];
-        pieces = unpinned_pieces[piece];
-
+        U64 pieces = bitboards[piece];
         while (pieces) {
             square = __builtin_ctzll(pieces);
-            attacks = get_attacks(piece, square, side) & (capture_mask | push_mask);
+            attacks = get_attacks(piece, square, side);
             while (attacks) {
-                destination = __builtin_ctzll(attacks);
-
-                moves_list.moves[moves_list.count++] = encode_move(square, destination, piece, 0, 0, 0);
+                int destination = __builtin_ctzll(attacks);
+                moves.push_back(encode_move(square, destination, piece, 0, 0, 0));
                 pop_lsb(attacks);
             }
             pop_lsb(pieces);
         }
     }
 
-    /******************************************\
-     *
-     *             CASTLING MOVES
-     *
-    \******************************************/
+    // generate the attacked squares as normal after the king is done
+    U64 attacked_squares = get_slider_attacks() | get_jumper_attacks();
+
+    // CASTLING MOVES
     if (side == white && (attacked_squares & bitboards[K]) == 0) {
         // if castling is available and king is not in check
         if (castle & wk && ((attacked_squares | occupancies[both]) & castle_mask_wk) == 0) {
-            moves_list.moves[moves_list.count++] = encode_move(e1, g1, K, 0, 0, 1);
-            moves_list.contains_castle = 1;
+            moves.push_back(encode_move(e1, g1, king, 0, 0, 1));
         }
-
         if (castle & wq && (attacked_squares & castle_attack_mask_wq) ==0 && (occupancies[both] & castle_piece_mask_wq) == 0 ) {
-            moves_list.moves[moves_list.count++] = encode_move(e1, c1, K, 0, 0, 1);
-            moves_list.contains_castle = 1;
+            moves.push_back(encode_move(e1, c1, king, 0, 0, 1));
         }
     } else if (side == black && (attacked_squares & bitboards[k]) == 0) {
         if (castle & bk && ((attacked_squares | occupancies[both]) & castle_mask_bk) == 0) {
-            moves_list.moves[moves_list.count++] = encode_move(e8, g8, k, 0, 0, 1);
-            moves_list.contains_castle = 1;
+            moves.push_back(encode_move(e8, g8, king, 0, 0, 1));
         }
-
         if (castle & bq && (attacked_squares & castle_attack_mask_bq) ==0 && (occupancies[both] & castle_piece_mask_bq) == 0 ) {
-            moves_list.moves[moves_list.count++] = encode_move(e8, c8, k, 0, 0, 1);
-            moves_list.contains_castle = 1;
+            moves.push_back(encode_move(e8, c8, king, 0, 0, 1));
         }
     }
+
+
+    return moves;
 }
 
 int Skunk::get_piece(int square) {
@@ -1202,13 +993,12 @@ void Skunk::add_move(t_moves &moves_list, int move) {
     moves_list.count++;
 }
 
-void Skunk::print_moves(t_moves &moves_list)
+void Skunk::print_moves(std::vector<int> &moves)
 {
     printf("%-9s %-6s %-8s %-7s %-9s %-9s %-9s\n","num", "source", "target", "piece", "score", "enpassant", "castle");
 
-    for (int i=0; i<moves_list.count; i++)
+    for (int move : moves)
     {
-        int move = moves_list.moves[i];
         printf("%-9d %-6s %-8s %-7c %-9d %-9d %-9d\n",
                move,
                square_to_coordinate[decode_source(move)],
@@ -1219,7 +1009,7 @@ void Skunk::print_moves(t_moves &moves_list)
                decode_castle(move)
                );
     }
-    printf("Total of %d moves.\n", moves_list.count);
+    printf("Total of %d moves.\n", moves.size());
 }
 
 void Skunk::init_heuristics() {
@@ -1249,14 +1039,11 @@ void Skunk::update_heuristics(int ply, int move, int depth) {
     history_table[piece][destination] += depth * depth;
 }
 
-void Skunk::sort_moves(int *moves, int num_moves) {
+void Skunk::sort_moves(vector<int> &moves) {
 
-    std::sort(moves, moves + num_moves, [&](const int &a, const int &b) {
-
-        int a_score = score_move(a);
-        int b_score = score_move(b);
-
-        return a_score > b_score;
+    // Sort the vector based on the score_move function
+    std::sort(moves.begin(), moves.end(), [this](int a, int b) {
+        return this->score_move(a) > this->score_move(b);
     });
 }
 
@@ -1277,7 +1064,7 @@ int Skunk::see(int move) {
     copy_board();
 
     // Perform the capture
-    make_move(move, all_moves);
+    make_move(move);
 
     // Recursively calculate the SEE value
     int see_value = victim_value - see(get_smallest_attacker(to));
@@ -1291,16 +1078,12 @@ int Skunk::see(int move) {
 int Skunk::get_smallest_attacker(int to) {
     // This function returns the move of the smallest attacker to the square 'to'
     // Generate all moves for the opponent's pieces
-    t_moves moves_list;
-    moves_list.count = -1;
-    generate_moves(moves_list);
+    std::vector<int> moves = generate_moves();
 
     int smallest_attacker_value = INT_MAX;
     int smallest_attacker_move = 0;
 
-    for (int i = 0; i < moves_list.count; i++) {
-        int move = moves_list.moves[i];
-
+    for (int move : moves) {
         // Check if the move is a capture and the destination is the target square
         if (is_capture(move) && decode_destination(move) == to) {
             int attacker_piece = get_piece(decode_source(move));
@@ -1353,8 +1136,8 @@ int Skunk::score_move(int move) {
     if (is_capture(move)) {
         score += mvv_lva[piece][victim] * 100;
         // Adjust capture score based on SEE value
-        int see_value = see(move);
-        score += see_value * 10;
+        // int see_value = see(move);
+        // score += see_value * 10;
     }
 
 #ifdef KILLER_HISTORY
@@ -1386,9 +1169,10 @@ int Skunk::quiesence(int alpha, int beta) {
         communicate();
     }
 
-    // Generate all legal moves
-    t_moves moves_list;
-    generate_moves(moves_list);
+    // Generate all pseudo-legal moves
+    std::vector<int> moves = generate_moves();
+
+    sort_moves(moves);
 
     // Check if the king is in check
     int check = is_check();
@@ -1407,14 +1191,14 @@ int Skunk::quiesence(int alpha, int beta) {
     }
 
     // Sort the moves to improve search efficiency
-    sort_moves(moves_list.moves, moves_list.count);
+    // sort_moves(moves_list.moves, moves_list.count);
 
     int score = INT_MIN;
 
     bool made_capture = false;
 
-    for (int i = 0; i < moves_list.count; i++) {
-        int move = moves_list.moves[i];
+    for (int move : moves) {
+
 
         // Only consider capture moves in quiescence search
         if (!is_capture(move)) continue;
@@ -1441,8 +1225,8 @@ int Skunk::quiesence(int alpha, int beta) {
         // Copy the board
         copy_board();
 
-        // Make the move on the board
-        make_move(move, only_captures);
+        // Make the move on the board, but skip illegal moves and non-captures
+        if (make_move(move) == 0) continue;
 
         // Recursively call quiescence search with negamax
         int test = -quiesence(-beta, -alpha);
@@ -1452,7 +1236,6 @@ int Skunk::quiesence(int alpha, int beta) {
 
         // Restore the board to its previous state
         restore_board();
-        moves--;
 
         // Alpha-beta pruning
         if (score >= beta) {
@@ -1513,7 +1296,7 @@ bool Skunk::should_do_null_move() {
 
 // new negamax
 int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
-    int best_move = 0, current_move, best_score = -INT_MAX, current_score, null_move_score;
+    int best_move = 0, best_score = -INT_MAX, current_score, null_move_score;
     bool fail_high = false, check = false;
     t_line line = {.cmove = 0};
 
@@ -1558,16 +1341,11 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
     }
 
-    t_moves moves_list;
-    moves_list.count = -1;
-    generate_moves(moves_list);
-    sort_moves(moves_list.moves, moves_list.count);
+    
+    std::vector<int> moves = generate_moves();
+    // sort_moves(moves_list.moves, moves_list.count);
 
     check = is_check();
-
-    if (moves_list.count == 0) {
-        return check ? (-CHECKMATE) + ply : 0;
-    }
 
     if (check) depth++;
 
@@ -1600,11 +1378,13 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     }
 
     copy_board();
+
     int searched_moves = 0;
 
-    for (int i = 0; i < moves_list.count; i++) {
-        current_move = moves_list.moves[i];
-        make_move(current_move, all_moves);
+    for (int move : moves) {
+
+        if (make_move(move) == 0) continue;
+
         ply++;
         repitition.table[repitition.count++] = zobrist;
 
@@ -1613,7 +1393,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         if (searched_moves == 0) {
             current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
         } else {
-            if (searched_moves >= LMR_DEPTH && depth >= LMR_MIN_DEPTH && !check && !is_capture(current_move) && decode_promoted(current_move) == 0) {
+            if (searched_moves >= LMR_DEPTH && depth >= LMR_MIN_DEPTH && !check && !is_capture(move) && decode_promoted(move) == 0) {
                 // Apply LMR
                 current_score = -negamax(-alpha - 1, -alpha, depth - 1 - LMR_REDUCTION, verify, NO_NULL, &line);
 
@@ -1635,7 +1415,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         // Check for best score and move
         if (current_score > best_score) {
             best_score = current_score;
-            best_move = current_move;
+            best_move = move;
         }
 
         // Null move verification re-check if no beta cut-off was found
@@ -1649,13 +1429,12 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         restore_board();
         ply--;
         repitition.count--;
-        moves--;
         searched_moves++;
 
         if (best_score > alpha) {
             alpha = best_score;
             if (pline != nullptr) {
-                pline->argmove[0] = current_move;
+                pline->argmove[0] = move;
                 memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                 pline->cmove = line.cmove + 1;
             }
@@ -1663,8 +1442,8 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             if (alpha >= beta) {
                 // Update killer moves and history here...
                 #ifdef KILLER_HISTORY
-                if (!is_capture(current_move) && ply < MAX_PLY) {
-                    update_heuristics(ply, current_move, depth);
+                if (!is_capture(move) && ply < MAX_PLY) {
+                    update_heuristics(ply, move, depth);
                 }
                 #endif
 
@@ -1676,7 +1455,12 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
     }
 
-    // Transposition table store
+    // no moves were searched, it is checkmate
+    if (searched_moves == 0) {
+        return check ? (-CHECKMATE) + ply : 0;
+    }
+
+    //Transposition table store
     #ifdef TRANSPOSITION_TABLE
     NodeType type;
     if (best_score <= alpha) {
@@ -2167,7 +1951,7 @@ void Skunk::parse_position(const std::string& command) {
 
             if (move == 0) break;
 
-            make_move(move, all_moves);
+            if (make_move(move) == 0) continue;
             repitition.table[repitition.count++] = zobrist;
         }
     }
@@ -2177,15 +1961,13 @@ void Skunk::parse_position(const std::string& command) {
 
 
 int Skunk::parse_move(const std::string& move_string) {
-    t_moves moves;
-    generate_moves(moves);
+    std::vector<int> moves = generate_moves();
     if (move_string.length() < 4) return 0;
 
     int source = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8;
     int target = (move_string[2] - 'a') + (8 - (move_string[3] - '0')) * 8;
 
-    for (int i=0; i<moves.count; i++) {
-        int move = moves.moves[i];
+    for (int move : moves) {
         if (decode_source(move)==source && decode_destination(move)==target) {
             int promoted = decode_promoted(move);
             // check if it is a promotion or not
@@ -2218,15 +2000,18 @@ int Skunk::perft_test(int depth) {
     
     nodes = 0;
 
-    t_moves moves;
-    generate_moves(moves);
+    std::vector<int> moves = generate_moves();
 
     auto start = std::chrono::steady_clock::now();
 
-    for (int i=0; i<moves.count; i++) {
-        copy_board();
+    copy_board();
 
-        make_move(moves.moves[i], all_moves);
+    for (int move : moves) {
+
+        // check if make_move returned illegal move
+        if (make_move(move) == 0) {
+            continue;
+        };
 
         int cummulative_nodes = nodes;
 
@@ -2238,47 +2023,16 @@ int Skunk::perft_test(int depth) {
         restore_board();
 
         printf("%s%s%c %d\n", 
-            square_to_coordinate[decode_source(moves.moves[i])],
-            square_to_coordinate[decode_destination(moves.moves[i])],
-            decode_promoted(moves.moves[i]) ? char_pieces[(decode_promoted(moves.moves[i]) % 6) + 6] : ' ',
+            square_to_coordinate[decode_source(move)],
+            square_to_coordinate[decode_destination(move)],
+            decode_promoted(move) ? ascii_pieces[(decode_promoted(move) % 6) + 6] : ' ',
             old_nodes);
-        // std::cout << square_to_coordinate[decode_source(moves.moves[i])] << square_to_coordinate[decode_destination(moves.moves[i])] << (decode_promoted(moves.moves[i]) ? char_pieces[(decode_promoted(moves.moves[i]) % 6) + 6] : ' ') << " " << old_nodes << std::endl;;
-
     }
 
     auto end = std::chrono::steady_clock::now();
 
     auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     std::cout << std::endl <<  nodes << std::endl;
-    
-    // printf("Starting PERFT test...\n");
-    // memset(&perft_results, 0, sizeof(perft));
-
-    // perft_results.total_nodes = 0;
-    // auto start = std::chrono::steady_clock::now();
-    // perft_test_helper(depth);
-    // auto end = std::chrono::steady_clock::now();
-
-    // auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-
-    // int per_second = -1;
-    // if (elapsed > 0) {
-    //     per_second = perft_results.total_nodes/elapsed;
-    // }
-
-    // printf("%-10s\t%-10s\t%-10s\t%-10s\t%-10s\t%-10s\n", "depth", "nodes", "captures", "enpassants", "castles", "promoted");
-
-    // for (int i=depth; i>=0; i--) {
-    //     printf("%-10d\t%-10d\t%-10d\t%-10d\t%-10d\t%-10d\n",
-    //            depth - i,
-    //            perft_results.nodes[i+1],
-    //            perft_results.captures[i+1],
-    //            perft_results.enpassants[i+1],
-    //            perft_results.castles[i+1],
-    //            perft_results.promotions[i+1]);
-    // }
-    // printf("Nodes: %lld\nTime: %d\nNPS: %d\n", perft_results.total_nodes, elapsed, per_second*1000);
-    // return perft_results.nodes[1];
 }
 
 bool Skunk::perft_test_position(const std::string &fen, int expected_result, int depth) {
@@ -2302,67 +2056,17 @@ void Skunk::perft_test_helper(int depth) {
         return;
     }
 
-    t_moves moves;
-    generate_moves(moves);
+    std::vector<int> moves = generate_moves();
 
-    for (int move_count = 0; move_count < moves.count; move_count ++) {
+    for (int move : moves) {
         copy_board();
-        make_move(moves.moves[move_count], all_moves);
+
+        if (make_move(move)==0) continue;
+
         perft_test_helper(depth - 1);
+
         restore_board();
     }
-    
-//     if (depth < 1) return;
-
-//     t_moves new_moves;
-//     t_moves psuedo;
-//     t_moves valid = {.count = 0};
-
-//     generate_moves(new_moves);
-
-//     copy_board();
-//     int made_moves = 0;
-//     for (int move_count = 0; move_count < new_moves.count; move_count++) {
-
-//         int  move = new_moves.moves[move_count];
-
-//         if (is_capture(move)) {
-//             perft_results.captures[depth]++;
-//         }
-//         if (decode_enpassant(move)) {
-
-//             perft_results.enpassants[depth] ++;
-//         }
-//         if (decode_castle(move)) {
-//             perft_results.castles[depth] ++;
-//         }
-//         if (decode_promoted(move)) {
-//             perft_results.promotions[depth] ++;
-//         }
-
-//         make_move(move, all_moves);
-
-
-//         valid.moves[valid.count++] = move;
-
-// #ifdef DEBUG
-//         assert(zobrist == generate_zobrist());
-// #endif
-
-//         perft_results.nodes[depth] ++;
-//         perft_results.total_nodes ++;
-//         perft_test_helper(depth - 1);
-
-
-//         restore_board();
-//     }
-
-//     // move counts differ
-// //    if (valid.count != new_moves.count) {
-// //        printf("Move count differ (%d to %d)\n", valid.count, new_moves.count);
-// //        print_board();
-// //        getchar();
-// //    }
 }
 
 int Skunk::is_repetition() {
@@ -2374,143 +2078,144 @@ int Skunk::is_repetition() {
     return 0;
 }
 
- int Skunk::make_move(int move, int move_flag) {
-//
-    if (move_flag == all_moves) {
+ int Skunk::make_move(int move) {
+    copy_board();
 
-        int source = decode_source(move);
-        int target = decode_destination(move);
-        int enp = decode_enpassant(move);
-        int castling = decode_castle(move);
-        int piece = decode_piece(move);
-        int promoted = decode_promoted(move);
+    int source = decode_source(move);
+    int target = decode_destination(move);
+    int enp = decode_enpassant(move);
+    int castling = decode_castle(move);
+    int piece = decode_piece(move);
+    int promoted = decode_promoted(move);
 
-        pop_bit(bitboards[piece], source);
-        zobrist ^= piece_keys[piece][source];
+    pop_bit(bitboards[piece], source);
+    zobrist ^= piece_keys[piece][source];
 
-        int pawn = P, knight = N, king = K, queen = Q, bishop = B, rook = R;
-        U64 *opponent_bitboards = bitboards + 6;
-        if (side == black) {
-            opponent_bitboards = bitboards;
-            pawn = p, knight = n, king = k, queen = q, bishop = b, rook = r;
+    int pawn = P, knight = N, king = K, queen = Q, bishop = B, rook = R;
+    U64 *opponent_bitboards = bitboards + 6;
+    if (side == black) {
+        opponent_bitboards = bitboards;
+        pawn = p, knight = n, king = k, queen = q, bishop = b, rook = r;
+    }
+
+    int victim = get_piece(target);
+
+    if (victim > -1) {
+        pop_bit(bitboards[victim], target);
+        piece_count[victim] --;
+        zobrist ^= piece_keys[victim][target];
+    }
+
+    set_bit(bitboards[piece], target);
+    zobrist ^= piece_keys[piece][target];
+
+    if (promoted) {
+        pop_bit(bitboards[pawn], target);
+        set_bit(bitboards[promoted], target);
+        piece_count[pawn] --;
+        piece_count[promoted] ++;
+        zobrist ^= piece_keys[pawn][target];
+        zobrist ^= piece_keys[promoted][target];
+    }
+
+    if (enp) {
+        if (side == white) {
+            pop_bit(bitboards[p], target + 8);
+            piece_count[p] --;
+            zobrist ^= piece_keys[p][target + 8];
+        } else {
+            pop_bit(bitboards[P], target - 8);
+            piece_count[P] --;
+            zobrist ^= piece_keys[P][target - 8];
         }
+    }
 
-        int victim = get_piece(target);
+    if (enpassant != no_square) {
+        zobrist ^= enpassant_keys[enpassant];
+    }
 
-        if (victim > -1) {
-            pop_bit(bitboards[victim], target);
-            piece_count[victim] --;
-            zobrist ^= piece_keys[victim][target];
+    enpassant = no_square;
+
+    if (piece == pawn && abs(source - target) == 16) {
+        if (side == white) {
+            enpassant = target + 8;
+            zobrist ^= enpassant_keys[target + 8];
+        } else {
+            enpassant = target - 8;
+            zobrist ^= enpassant_keys[target - 8];
         }
+    }
 
-        set_bit(bitboards[piece], target);
-        zobrist ^= piece_keys[piece][target];
-
-        if (promoted) {
-            pop_bit(bitboards[pawn], target);
-            set_bit(bitboards[promoted], target);
-            piece_count[pawn] --;
-            piece_count[promoted] ++;
-            zobrist ^= piece_keys[pawn][target];
-            zobrist ^= piece_keys[promoted][target];
+    if (castling) {
+        castled = 1;
+        switch (target) {
+            case g1:
+                pop_bit(bitboards[R], h1);
+                set_bit(bitboards[R], f1);
+                zobrist ^= piece_keys[R][h1];
+                zobrist ^= piece_keys[R][f1];
+                break;
+            case c1:
+                pop_bit(bitboards[R], a1);
+                set_bit(bitboards[R], d1);
+                zobrist ^= piece_keys[R][a1];
+                zobrist ^= piece_keys[R][d1];
+                break;
+            case g8:
+                pop_bit(bitboards[r], h8);
+                set_bit(bitboards[r], f8);
+                zobrist ^= piece_keys[r][h8];
+                zobrist ^= piece_keys[r][f8];
+                break;
+            case c8:
+                pop_bit(bitboards[r], a8);
+                set_bit(bitboards[r], d8);
+                zobrist ^= piece_keys[r][a8];
+                zobrist ^= piece_keys[r][d8];
+                break;
         }
+    }
 
-        if (enp) {
-            if (side == white) {
-                pop_bit(bitboards[p], target + 8);
-                piece_count[p] --;
-                zobrist ^= piece_keys[p][target + 8];
-            } else {
-                pop_bit(bitboards[P], target - 8);
-                piece_count[P] --;
-                zobrist ^= piece_keys[P][target - 8];
-            }
-        }
+    zobrist ^= castle_keys[castle];
+    castle &= castling_rights[source];
+    castle &= castling_rights[target];
+    zobrist ^= castle_keys[castle];
 
-        if (enpassant != no_square) {
-            zobrist ^= enpassant_keys[enpassant];
-        }
+    occupancies[white] = 0;
+    occupancies[black] = 0;
+    occupancies[both] = 0;
 
-        enpassant = no_square;
+    // loop over white pieces bitboards
+    for (int bb_piece = P; bb_piece <= K; bb_piece++)
+        // update white occupancies
+        occupancies[white] |= bitboards[bb_piece];
 
-        if (piece == pawn && abs(source - target) == 16) {
-            if (side == white) {
-                enpassant = target + 8;
-                zobrist ^= enpassant_keys[target + 8];
-            } else {
-                enpassant = target - 8;
-                zobrist ^= enpassant_keys[target - 8];
-            }
-        }
+    // loop over black pieces bitboards
+    for (int bb_piece = p; bb_piece <= k; bb_piece++)
+        // update black occupancies
+        occupancies[black] |= bitboards[bb_piece];
 
-        if (castling) {
-            castled = 1;
-            switch (target) {
-                case g1:
-                    pop_bit(bitboards[R], h1);
-                    set_bit(bitboards[R], f1);
-                    zobrist ^= piece_keys[R][h1];
-                    zobrist ^= piece_keys[R][f1];
-                    break;
-                case c1:
-                    pop_bit(bitboards[R], a1);
-                    set_bit(bitboards[R], d1);
-                    zobrist ^= piece_keys[R][a1];
-                    zobrist ^= piece_keys[R][d1];
-                    break;
-                case g8:
-                    pop_bit(bitboards[r], h8);
-                    set_bit(bitboards[r], f8);
-                    zobrist ^= piece_keys[r][h8];
-                    zobrist ^= piece_keys[r][f8];
-                    break;
-                case c8:
-                    pop_bit(bitboards[r], a8);
-                    set_bit(bitboards[r], d8);
-                    zobrist ^= piece_keys[r][a8];
-                    zobrist ^= piece_keys[r][d8];
-                    break;
-            }
-        }
+    // update both sides occupancies
+    occupancies[both] |= occupancies[white];
+    occupancies[both] |= occupancies[black];
 
-        zobrist ^= castle_keys[castle];
-        castle &= castling_rights[source];
-        castle &= castling_rights[target];
-        zobrist ^= castle_keys[castle];
+    side ^= 1;
 
-        occupancies[white] = 0;
-        occupancies[black] = 0;
-        occupancies[both] = 0;
+    moves ++;
 
-        // loop over white pieces bitboards
-        for (int bb_piece = P; bb_piece <= K; bb_piece++)
-            // update white occupancies
-            occupancies[white] |= bitboards[bb_piece];
+    zobrist ^= side_key;
 
-        // loop over black pieces bitboards
-        for (int bb_piece = p; bb_piece <= k; bb_piece++)
-            // update black occupancies
-            occupancies[black] |= bitboards[bb_piece];
-
-        // update both sides occupancies
-        occupancies[both] |= occupancies[white];
-        occupancies[both] |= occupancies[black];
-
-        side ^= 1;
-
-        moves ++;
-
-        zobrist ^= side_key;
-
-        return 1;
-    } else {
-        // call make_move recursively
-        if (is_capture(move))
-            return make_move(move, all_moves);
-
-        // move is not a capture, return 0
+    // make sure that king has not been exposed into a check
+    if (is_square_attacked((side == white) ? __builtin_ctzll(bitboards[k]) : __builtin_ctzll(bitboards[K]), side))
+    {
+        // take move back
+        restore_board();
+        
+        // return illegal move
         return 0;
     }
+    
+    return 1;
 }
 
 void Skunk::print_move_detailed(int move) {
@@ -2525,19 +2230,18 @@ void Skunk::print_move_detailed(int move) {
     );
 }
 void Skunk::show_sort() {
-    t_moves moves_list;
-    generate_moves(moves_list);
+    std::vector<int> moves = generate_moves();
     printf("Moves before sort:\n");
-    for (int i=0; i<moves_list.count; i++) {
-        print_move(moves_list.moves[i]);
+    for (int move : moves) {
+        print_move(move);
         printf("\n");
     }
-    sort_moves(moves_list.moves, moves_list.count);
-    printf("After sort:\n");
-    for (int i=0; i<moves_list.count; i++) {
-        print_move(moves_list.moves[i]);
-        printf("\n");
-    }
+    // sort_moves(moves_list.moves, moves_list.count);
+    // printf("After sort:\n");
+    // for (int i=0; i<moves_list.count; i++) {
+    //     print_move(moves_list.moves[i]);
+    //     printf("\n");
+    // }
 }
 void Skunk::print_move(int move) {
     int promoted = decode_promoted(move);
