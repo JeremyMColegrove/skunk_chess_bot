@@ -197,10 +197,9 @@ struct TTEntry {
 };
 
 typedef struct {
-    int moves[256];
-    int count;
-    int contains_castle;
-} t_moves;
+    int list[MAX_PLY];
+    int count = 0;
+} Moves;
 
 typedef struct {
     int cmove;              // Number of t_moves in the line.
@@ -559,7 +558,7 @@ public:
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
      void fill_occupancies();
-    vector<int> generate_moves();
+    void generate_moves(Moves &moves);
      void print_move_detailed(int move);
      int make_move(int move);
      int perft_test(int depth);
@@ -573,14 +572,14 @@ public:
      bool is_check();
      int coordinate_to_square(char *coordinate);
      int score_move(int move);
-    void sort_moves(vector<int> &moves);
+    void sort_moves(Moves *moves);
      unsigned int get_random_U32_number();
      U64 get_random_U64_number();
      U64 generate_zobrist();
      void print_move(int move);
      void init();
      void test_moves_sort();
-    void print_moves(std::vector<int> &moves);
+    void print_moves(Moves &moves);
 
     // time functions to incorporate time checking
     std::chrono::steady_clock::time_point start_time;
@@ -647,7 +646,6 @@ private:
     void construct_bishop_tables();
     void construct_rook_tables();
     void construct_slider_attacks();
-    void add_move(t_moves &moves_list, int move);
     void clear_moves();
     int calculate_material_score();
     int calculate_square_occupancy_score();

@@ -830,9 +830,10 @@ inline bool Skunk::is_promotion_square(int square, int side) {
 }
 
 // generate all moves in list
-vector<int> Skunk::generate_moves()
+void Skunk::generate_moves(Moves &moves)
 {
-    std::vector<int> moves;
+    moves.count = 0;
+
     int square;
 
     // get the right pieces (for easier lookup later)
@@ -855,7 +856,7 @@ vector<int> Skunk::generate_moves()
     while (king_moves) {
         square = __builtin_ctzll(king_moves);
         // encode the move
-        moves.push_back(encode_move(king_square, square, king, 0, 0, 0));
+        moves.list[moves.count++] = encode_move(king_square, square, king, 0, 0, 0);
         pop_lsb(king_moves);
     }
 
@@ -870,14 +871,14 @@ vector<int> Skunk::generate_moves()
         while (pawn_moves) {
             int destination = __builtin_ctzll(pawn_moves);
             if (is_promotion_square(destination, side)) {
-                moves.push_back(encode_move(square, destination, pawn, rook, 0, 0));
-                moves.push_back(encode_move(square, destination, pawn, bishop, 0, 0));
-                moves.push_back(encode_move(square, destination, pawn, queen, 0, 0));
-                moves.push_back(encode_move(square, destination, pawn, knight, 0, 0));
+                moves.list[moves.count++] = encode_move(square, destination, pawn, rook, 0, 0);
+                moves.list[moves.count++] = encode_move(square, destination, pawn, bishop, 0, 0);
+                moves.list[moves.count++] = encode_move(square, destination, pawn, queen, 0, 0);
+                moves.list[moves.count++] = encode_move(square, destination, pawn, knight, 0, 0);
             } else if (destination == enpassant) {
-                moves.push_back(encode_move(square, destination, pawn, 0, 1, 0));
+                moves.list[moves.count++] = encode_move(square, destination, pawn, 0, 1, 0);
             } else {
-                moves.push_back(encode_move(square, destination, pawn, 0, 0, 0));
+                moves.list[moves.count++] = encode_move(square, destination, pawn, 0, 0, 0);
             }
             pop_lsb(pawn_moves);
         }
@@ -896,7 +897,7 @@ vector<int> Skunk::generate_moves()
             attacks = get_attacks(piece, square, side);
             while (attacks) {
                 int destination = __builtin_ctzll(attacks);
-                moves.push_back(encode_move(square, destination, piece, 0, 0, 0));
+                moves.list[moves.count++] = encode_move(square, destination, piece, 0, 0, 0);
                 pop_lsb(attacks);
             }
             pop_lsb(pieces);
@@ -910,22 +911,19 @@ vector<int> Skunk::generate_moves()
     if (side == white && (attacked_squares & bitboards[K]) == 0) {
         // if castling is available and king is not in check
         if (castle & wk && ((attacked_squares | occupancies[both]) & castle_mask_wk) == 0) {
-            moves.push_back(encode_move(e1, g1, king, 0, 0, 1));
+            moves.list[moves.count++] = encode_move(e1, g1, king, 0, 0, 1);
         }
         if (castle & wq && (attacked_squares & castle_attack_mask_wq) ==0 && (occupancies[both] & castle_piece_mask_wq) == 0 ) {
-            moves.push_back(encode_move(e1, c1, king, 0, 0, 1));
+            moves.list[moves.count++] = encode_move(e1, c1, king, 0, 0, 1);
         }
     } else if (side == black && (attacked_squares & bitboards[k]) == 0) {
         if (castle & bk && ((attacked_squares | occupancies[both]) & castle_mask_bk) == 0) {
-            moves.push_back(encode_move(e8, g8, king, 0, 0, 1));
+            moves.list[moves.count++] = encode_move(e8, g8, king, 0, 0, 1);
         }
         if (castle & bq && (attacked_squares & castle_attack_mask_bq) ==0 && (occupancies[both] & castle_piece_mask_bq) == 0 ) {
-            moves.push_back(encode_move(e8, c8, king, 0, 0, 1));
+            moves.list[moves.count++] = encode_move(e8, c8, king, 0, 0, 1);
         }
     }
-
-
-    return moves;
 }
 
 int Skunk::get_piece(int square) {
@@ -987,18 +985,13 @@ U64 Skunk::get_attacks(int piece, int square, int side) {
     return attacks;
 }
 
-void Skunk::add_move(t_moves &moves_list, int move) {
-    // check if it is a legal move
-    moves_list.moves[moves_list.count] = move;
-    moves_list.count++;
-}
-
-void Skunk::print_moves(std::vector<int> &moves)
+void Skunk::print_moves(Moves &moves)
 {
     printf("%-9s %-6s %-8s %-7s %-9s %-9s %-9s\n","num", "source", "target", "piece", "score", "enpassant", "castle");
 
-    for (int move : moves)
-    {
+    for (int i=0; i<moves.count; i++) {
+        int move = moves.list[i];
+
         printf("%-9d %-6s %-8s %-7c %-9d %-9d %-9d\n",
                move,
                square_to_coordinate[decode_source(move)],
@@ -1009,7 +1002,7 @@ void Skunk::print_moves(std::vector<int> &moves)
                decode_castle(move)
                );
     }
-    printf("Total of %d moves.\n", moves.size());
+    printf("Total of %d moves.\n", moves.count);
 }
 
 void Skunk::init_heuristics() {
@@ -1039,11 +1032,13 @@ void Skunk::update_heuristics(int ply, int move, int depth) {
     history_table[piece][destination] += depth * depth;
 }
 
-void Skunk::sort_moves(vector<int> &moves) {
+void Skunk::sort_moves(Moves *moves) {
 
-    // Sort the vector based on the score_move function
-    std::sort(moves.begin(), moves.end(), [this](int a, int b) {
-        return this->score_move(a) > this->score_move(b);
+    std::sort(moves->list, moves->list + moves->count, [&](const int &a, const int &b) {
+        int a_score = score_move(a);
+        int b_score = score_move(b);
+
+        return a_score > b_score;
     });
 }
 
@@ -1078,12 +1073,15 @@ int Skunk::see(int move) {
 int Skunk::get_smallest_attacker(int to) {
     // This function returns the move of the smallest attacker to the square 'to'
     // Generate all moves for the opponent's pieces
-    std::vector<int> moves = generate_moves();
+    Moves moves;
+    generate_moves(moves);
 
     int smallest_attacker_value = INT_MAX;
     int smallest_attacker_move = 0;
 
-    for (int move : moves) {
+    for (int i=0; i<moves.count; i++) {
+        int move = moves.list[i];
+
         // Check if the move is a capture and the destination is the target square
         if (is_capture(move) && decode_destination(move) == to) {
             int attacker_piece = get_piece(decode_source(move));
@@ -1170,9 +1168,10 @@ int Skunk::quiesence(int alpha, int beta) {
     }
 
     // Generate all pseudo-legal moves
-    std::vector<int> moves = generate_moves();
+    Moves moves;
+    generate_moves(moves);
 
-    sort_moves(moves);
+    sort_moves(&moves);
 
     // Check if the king is in check
     int check = is_check();
@@ -1197,8 +1196,8 @@ int Skunk::quiesence(int alpha, int beta) {
 
     bool made_capture = false;
 
-    for (int move : moves) {
-
+    for (int i=0; i<moves.count; i++) {
+        int move = moves.list[i];
 
         // Only consider capture moves in quiescence search
         if (!is_capture(move)) continue;
@@ -1342,8 +1341,10 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     }
 
     
-    std::vector<int> moves = generate_moves();
-    // sort_moves(moves_list.moves, moves_list.count);
+    Moves moves;
+    generate_moves(moves);
+
+    sort_moves(&moves);
 
     check = is_check();
 
@@ -1381,7 +1382,9 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     int searched_moves = 0;
 
-    for (int move : moves) {
+    for (int i = 0; i<moves.count; i++) {
+
+        int move = moves.list[i];
 
         if (make_move(move) == 0) continue;
 
@@ -1455,11 +1458,13 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
     }
 
+    
+
     // no moves were searched, it is checkmate
     if (searched_moves == 0) {
-        return check ? (-CHECKMATE) + ply : 0;
+        best_score = check ? (-CHECKMATE) + ply : 0;
     }
-
+    
     //Transposition table store
     #ifdef TRANSPOSITION_TABLE
     NodeType type;
@@ -1472,6 +1477,8 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     }
     store_transposition_table(zobrist, best_score, depth, best_move, type);
     #endif
+
+    
 
     return best_score;
 }
@@ -1961,13 +1968,16 @@ void Skunk::parse_position(const std::string& command) {
 
 
 int Skunk::parse_move(const std::string& move_string) {
-    std::vector<int> moves = generate_moves();
+    Moves moves;
+    generate_moves(moves);
     if (move_string.length() < 4) return 0;
 
     int source = (move_string[0] - 'a') + (8 - (move_string[1] - '0')) * 8;
     int target = (move_string[2] - 'a') + (8 - (move_string[3] - '0')) * 8;
 
-    for (int move : moves) {
+    for (int i=0; i<moves.count; i++) {
+        int move = moves.list[i];
+
         if (decode_source(move)==source && decode_destination(move)==target) {
             int promoted = decode_promoted(move);
             // check if it is a promotion or not
@@ -2000,13 +2010,15 @@ int Skunk::perft_test(int depth) {
     
     nodes = 0;
 
-    std::vector<int> moves = generate_moves();
+    Moves moves;
+    generate_moves(moves);
 
     auto start = std::chrono::steady_clock::now();
 
     copy_board();
 
-    for (int move : moves) {
+    for (int i=0; i<moves.count; i++) {
+        int move = moves.list[i];
 
         // check if make_move returned illegal move
         if (make_move(move) == 0) {
@@ -2056,10 +2068,13 @@ void Skunk::perft_test_helper(int depth) {
         return;
     }
 
-    std::vector<int> moves = generate_moves();
+    Moves moves;
+    generate_moves(moves);
 
-    for (int move : moves) {
-        copy_board();
+    copy_board();
+    
+    for (int i=0; i<moves.count; i++) {
+        int move = moves.list[i];
 
         if (make_move(move)==0) continue;
 
@@ -2230,9 +2245,11 @@ void Skunk::print_move_detailed(int move) {
     );
 }
 void Skunk::show_sort() {
-    std::vector<int> moves = generate_moves();
+    Moves moves;
+    generate_moves(moves);
     printf("Moves before sort:\n");
-    for (int move : moves) {
+    for (int i =0; i<moves.count; i++) {
+        int move = moves.list[i];
         print_move(move);
         printf("\n");
     }

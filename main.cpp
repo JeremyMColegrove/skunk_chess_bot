@@ -24,9 +24,9 @@ std::vector<std::string> split_command(const std::string& input);
 
 int main(int argc, char **argv) {
     // Skunk *skunk = new Skunk();
-    // parse_command("position fen rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", skunk);
-    // skunk->make_move(2096);
-    // parse_command("board", skunk);
+    // parse_command("position fen rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8 ", skunk);
+    // parse_command("perft 5", skunk);
+
     if (argc > 1 && strcmp(argv[1], "test_suite")==0) {
         test_positions();
     } else if (argc > 2) {
@@ -158,9 +158,10 @@ void parse_command(const std::string& cmd, Skunk* skunk) {
         skunk->parse_perft(cmd);
     } else if (cmd == "board") {
         // skunk->print_board();
-        std::vector<int> moves = skunk->generate_moves();
+        Moves moves;
+        skunk->generate_moves(moves);
         skunk->print_board();
-        skunk->sort_moves(moves);
+        skunk->sort_moves(&moves);
         skunk->print_moves(moves);
 
         // skunk->sort_moves(moves.moves, moves.count);
