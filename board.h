@@ -42,7 +42,7 @@
 
 // flag for verified null move pruning
 
-// #define VERIFIED_NULL_MOVE
+#define VERIFIED_NULL_MOVE
 
 // alpha beta flag
 #define ALPHA_BETA

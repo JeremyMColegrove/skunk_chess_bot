@@ -1728,6 +1728,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, PVLi
 
     copy_board();
     int legal_moves = 0;
+    int searched_moves = 0;
     for (int i = 0; i < moves_list.count; i++) {
         current_move = moves_list.list[i];
         
@@ -1740,21 +1741,23 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, PVLi
         repitition.table[repitition.count++] = zobrist;
 
         re_search:
-        if (i == 0) {
-            current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
-        } else {
-            // Late Move Reductions (LMR)
-            if (i > 3 && depth > 2 && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
-                int LMR_R = 2;
-                current_score = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, nullptr);
-            } else {
-                current_score = alpha + 1;
-            }
+        if (searched_moves >= LMR_DEPTH && depth >= LMR_MIN_DEPTH && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
+            // Apply LMR
+            current_score = -negamax(-alpha - 1, -alpha, depth - 1 - LMR_REDUCTION, verify, NO_NULL, &line);
 
-            // Principal Variation Search (PVS)
-            if (current_score > alpha) {
-                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, nullptr);
+            if (current_score > alpha && current_score < beta) {
+                // Re-search with full depth, as the move is better than expected
+                current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+            }
+        } else {
+            // Apply PVS
+            if (searched_moves == 0) {
+                current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
+            } else {
+                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, &line);
+
                 if (current_score > alpha && current_score < beta) {
+                    // Re-search with full window, as the move is better than expected
                     current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
                 }
             }
@@ -1777,7 +1780,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, PVLi
         ply--;
         repitition.count--;
         moves--;
-
+        searched_moves ++;
         if (best_score > alpha) {
             alpha = best_score;
             if (pline != nullptr) {
@@ -1792,12 +1795,6 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, PVLi
         if (alpha >= beta) {
             // Update killer moves and history here...
 #ifdef KILLER_HISTORY
-            // ADD mask ply check here to avoid segfaults
-            // if (!is_capture(current_move) && ply < MAX_PLY) {
-            //     history_moves[side][decode_source(current_move)][decode_destination(current_move)] += depth*depth;
-            //     killer_moves[1][ply] = killer_moves[0][ply];
-            //     killer_moves[0][ply] = current_move;
-            // }
             if (!is_capture(current_move) && ply < MAX_PLY) {
                 update_heuristics(ply, current_move, depth);
             }
