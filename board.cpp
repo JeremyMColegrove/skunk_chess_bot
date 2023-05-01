@@ -925,6 +925,328 @@ void Skunk::generate_moves(Moves &moves)
         }
     }
 }
+// generate all t_moves
+// void Skunk::generate_moves(Moves &moves_list)
+// {
+//     // the goal of this move generator is to use the least branching possible, even at the cost of calculation
+
+//     // gets the attacked squares that the other side is attacking
+//     // init move count
+//     moves_list.count = 0;
+
+//     // init variables
+//     // try and leverage faster registers by using one variable, trying to keep this variable in reg rather than swapping for each piece
+//     U64 pieces = 0ULL;
+//     U64 attacked_squares, attack_sliders, attack_jumpers;
+//     int square;
+//     /******************************************\
+//      *
+//      *                  KING MOVES
+//      *
+//     \******************************************/
+
+//     // get the right pieces
+//     int pawn, knight, bishop, rook, queen, king;
+//     U64 *opponent_bitboards;
+//     if (side == black) {
+//         pawn = p, knight=n, bishop=b, rook=r, queen=q, king=k;
+//         opponent_bitboards=bitboards;
+//     } else {
+//         pawn = P, knight=N, bishop=B, rook=R, queen=Q, king=K;
+//         opponent_bitboards=bitboards+6;
+//     }
+
+//     if (bitboards[K] == 0 || bitboards[k] == 0) {
+//         std::cout << "KING IS OFF OF THE BOARD" << std::endl;
+//     }
+
+//     int king_square = __builtin_ctzll(bitboards[king]);
+    
+//     pop_bit(occupancies[both], king_square);
+//     attack_sliders = get_slider_attacks();
+//     attack_jumpers = get_jumper_attacks();
+//     attacked_squares = attack_jumpers | attack_sliders;
+//     set_bit(occupancies[both], king_square);
+
+//     pieces = king_masks[__builtin_ctzll(bitboards[king])] & ~occupancies[side] & ~attacked_squares;
+//     // get all of the destinations for the king
+//     while (pieces) {
+//         square = __builtin_ctzll(pieces);
+//         // encode the move
+//         moves_list.list[moves_list.count++] = encode_move(__builtin_ctzll(bitboards[king]), square, king, 0, 0, 0);
+//         pop_lsb(pieces);
+//     }
+
+//     /******************************************\
+//      *
+//      *             INIT OTHER MOVES
+//      *
+//     \******************************************/
+
+//     // generate the attacked squares as normal after the king is done
+//     attack_sliders = get_slider_attacks();
+//     attack_jumpers = get_jumper_attacks();
+//     attacked_squares = attack_jumpers | attack_sliders;
+
+
+//     // calculate the capture mask (if a piece is giving check, a valid move is capturing the piece)
+
+//     U64 capture_mask = 0ULL;
+//     U64 push_mask    = 0ULL;
+
+//     // get a bitboard with all attackers that have king in check on them
+//     // do pawn first
+//     capture_mask |= get_bishop_attacks(king_square, occupancies[both]) & (opponent_bitboards[B] | opponent_bitboards[Q]);
+//     capture_mask |= get_rook_attacks(king_square, occupancies[both]) & (opponent_bitboards[R] | opponent_bitboards[Q]);
+
+//     // here we have our slider pieces, we can use these to fill our push mask before adding other pieces
+//     U64 sliders = capture_mask;
+//     while (sliders) {
+//         square = __builtin_ctzll(sliders);
+//         push_mask |= rays[square][king_square];
+//         pop_lsb(sliders);
+//     }
+
+
+//     capture_mask |= knight_masks[king_square] & opponent_bitboards[N];
+//     capture_mask |= pawn_masks[side][king_square] & opponent_bitboards[P];
+
+
+//     // if no pieces are checking the king, then any move on the board is a valid move and we do not check for early escape
+//     if (capture_mask == 0 && push_mask == 0) {
+//         capture_mask = 0xFFFFFFFFFFFFFFFF;
+//         push_mask = 0xFFFFFFFFFFFFFFFF;
+
+//     } else {
+//         // the capture mask contains how many pieces are checking the king.
+//         // //If more than one piece, the only valid moves are king moves. We can escape early here.
+//         int count = __builtin_popcountll(capture_mask); 
+
+//         if (count > 1) {
+//             return;
+//         }
+//     }
+//     // print_bitboard(push_mask);
+//     /******************************************\
+//      *
+//      *              PINNED PIECES
+//      *
+//     \******************************************/
+
+//     // calculate pinned pieces first and remove them from the board for further move generation
+//     U64 unpinned_pieces[12];
+//     memcpy(unpinned_pieces, bitboards, 12 * sizeof(U64));
+
+//     // make king a slider piece, and detect intersection with opponent sliding enemy_attacks. Then, any piece on those intersections is pinned
+//     U64 slider_king = get_bishop_attacks(king_square, occupancies[both]) | get_rook_attacks(king_square, occupancies[both]);
+//     int pinner_pieces[] = {R, B, Q};
+//     int pinner_piece, enemy_square, pinned_square, piece, destination;
+//     // calculate the moves for each piece in each direction
+//     for (int direction=0; direction<8; direction++) {
+//         // get the king ray in the opposite direction
+//         U64 king_ray = slider_king & rays[king_square][nearest_square[7 - direction][king_square]];
+
+//         // check pins by each type of piece
+//         for (int piece_index = 0; piece_index<3; piece_index++) {
+//             pinner_piece = pinner_pieces[piece_index];
+
+//             pieces = opponent_bitboards[pinner_piece];
+//             while (pieces != 0) {
+//                 enemy_square = __builtin_ctzll(pieces);
+//                 if (enemy_square < 0 || enemy_square > 63) {
+//                     std::cout << "enemy square is wrong" << std::endl;
+//                 }
+
+//                 if (pieces)
+//                 pop_lsb(pieces);
+
+//                 // which type of piece is it? Shoot, we need to know this to generate its attacks
+//                 U64 intersection = get_attacks(pinner_piece, enemy_square, side ^ 1);
+
+//                 if (direction < 0 || direction > 8) {
+//                     std::cout << "issue with direction" << std::endl;
+//                 }
+
+        
+//                 int nearest_sq = nearest_square[direction][enemy_square];
+
+                
+//                 if (nearest_sq < 0 || nearest_sq > 63) {
+//                     std::cout << "nearest_sq is wrong" << nearest_sq << ":" << direction << ":" << enemy_square << std::endl;
+//                 }
+
+//                 intersection  &= rays[enemy_square][nearest_sq];
+//                 intersection &= king_ray;
+//                 intersection &= occupancies[side];
+//                 // if there is no pinned piece, do not try and pop a bit off...just return early here (happens more often than not)
+//                 if (intersection == 0) {
+//                     continue;
+//                 }
+
+//                 // get the square that the pinned piece is on
+//                 pinned_square = __builtin_ctzll(intersection);
+//                 // get the piece type on that square
+//                 piece = get_piece(pinned_square);
+
+//                 pop_bit(unpinned_pieces[piece], pinned_square);
+// //                 we are only able to move on the ray between king and enemy piece, and must move so that it can block check
+//                 U64 attacks = get_attacks(piece, pinned_square, side) & (rays[king_square][enemy_square] | (1ULL << enemy_square)) & (push_mask | capture_mask);
+
+// //              go through each valid attack and add it to the list of moves
+//                 while (attacks) {
+//                     destination = __builtin_ctzll(attacks);
+//                     moves_list.list[moves_list.count++] = encode_move(pinned_square, destination, piece, 0, 0, 0);
+//                     pop_lsb(attacks);
+//                 }
+//             }
+//         }
+//     }
+//     /******************************************\
+//      *
+//      *              REGULAR MOVES
+//      *
+//     \******************************************/
+
+// //    // we now are only dealing with unpinned pieces and no king movements, just plain and simple movements from here on out...
+//     U64 attacks;
+
+
+//     U64 filtered_capture_mask = capture_mask, filtered_push_mask = push_mask;
+
+//     // do pawn attacks first
+//     if (enpassant != no_square) {
+//         filtered_capture_mask |= (1ULL << enpassant);
+//         filtered_push_mask |= (1ULL << enpassant);
+//     }
+
+//     pieces = unpinned_pieces[pawn];
+//     while (pieces) {
+//         square = __builtin_ctzll(pieces);
+//         // get this persons attacks
+
+//         attacks = get_attacks(pawn, square, side) & (filtered_capture_mask | filtered_push_mask);
+
+//         // add each filtered (non promotion) attack
+//         U64 filtered = attacks & ~row8 & ~row1;
+
+//         // filter out pawn promotions
+//         while (filtered) {
+//             int destination = __builtin_ctzll(filtered);
+//             if (destination == enpassant) {
+//                 // remove both pawns from the board, check for check
+//                 int victim = enpassant + 8*(side==white?1:-1);
+
+//                 pop_bit(occupancies[both], square);
+
+//                 pop_bit(occupancies[both], victim);
+
+//                 set_bit(occupancies[both], enpassant);
+
+//                 // check if the king is horizontally in check by any queen or rook
+//                 // !!! Note Apr 28 2023, forgot to do diagonal attacks !!!
+//                 // include any pinned pieces in this check
+
+//                 // check each queen
+//                 int lsq = nearest_square[DW][king_square], rsq=nearest_square[DE][king_square], usq = nearest_square[DN][king_square], dsq=nearest_square[DS][king_square];
+//                 U64 horizontal_mask = rays[king_square][lsq] | rays[king_square][rsq] | rays[king_square][usq] | rays[king_square][dsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << usq) | (1ULL << dsq) | (1ULL << king_square);
+//                 U64 king_possible_pin_masks = get_queen_attacks(king_square, occupancies[both]) | (1ULL << king_square);//(rays[king_square][lsq] | rays[king_square][rsq] | rays[king_square][usq] | rays[king_square][dsq] | (1ULL << lsq) | (1ULL << rsq) | (1ULL << usq) | (1ULL << dsq) | (1ULL << king_square));
+                
+
+//                 U64 horizontal_attackers = (opponent_bitboards[R] | opponent_bitboards[Q]) & (king_possible_pin_masks & horizontal_mask);
+//                 U64 diagonal_attackers = ( opponent_bitboards[B] | opponent_bitboards[Q]) & (king_possible_pin_masks & ~horizontal_mask);
+                
+//                 // print_bitboard(horizontal_attackers);
+//                 // print_bitboard(diagonal_attackers);
+//                 // print_bitboard(king_possible_pin_masks);
+//                 U64 sliders = 0ULL;
+//                 U64 diagonals = 0ULL;
+
+//                 // check if king is in attack after any enpassant moves from horizontal pieces
+//                 while (horizontal_attackers) {
+//                     int horizontal_attacker_square = __builtin_ctzll(horizontal_attackers);
+//                     sliders |= get_rook_attacks(horizontal_attacker_square, occupancies[both]);
+//                     pop_lsb(horizontal_attackers);
+//                 }
+
+//                 // check if king is in attack after any enpassant moves from diagonal pieces
+//                 while (diagonal_attackers) {
+//                     int diagonal_attacker_square = __builtin_ctzll(diagonal_attackers);
+//                     diagonals |= get_bishop_attacks(diagonal_attacker_square, occupancies[both]);
+//                     pop_lsb(diagonal_attackers);
+//                 }
+//                 // print_bitboard(diagonals);
+
+//                 // the pawn enpassant does not put the king in check by horizontal sliders
+//                 if (((sliders | diagonals) & bitboards[king]) == 0) {
+//                     moves_list.list[moves_list.count++] = encode_move(square, destination, pawn, 0, 1, 0);
+//                 }
+
+//                 pop_bit(occupancies[both], enpassant);
+//                 set_bit(occupancies[both], square);
+
+//                 set_bit(occupancies[both], victim);
+//             } else {
+//                 moves_list.list[moves_list.count++] = encode_move(square, destination, pawn, 0, 0, 0);
+//             }
+//             pop_lsb(filtered);
+//         }
+//         // get pawn pushes/captures onto the 8th rank
+//         filtered = attacks & (row8 | row1);
+//         while (filtered) {
+//             int destination = __builtin_ctzll(filtered);
+//             moves_list.list[moves_list.count++] = encode_move(square, destination, pawn, rook, 0, 0);
+//             moves_list.list[moves_list.count++] = encode_move(square, destination, pawn, bishop, 0, 0);
+//             moves_list.list[moves_list.count++] = encode_move(square, destination, pawn, queen, 0, 0);
+//             moves_list.list[moves_list.count++] = encode_move(square, destination, pawn, knight, 0, 0);
+
+//             pop_lsb(filtered);
+//         }
+//         pop_lsb(pieces);
+//     }
+
+//     // do rook, queen, bishop, and knight moves
+//     int regular_pieces[] = {rook, queen, bishop, knight};
+//     for (int i=0; i<4; i++) {
+//         piece = regular_pieces[i];
+//         pieces = unpinned_pieces[piece];
+
+//         while (pieces) {
+//             square = __builtin_ctzll(pieces);
+//             attacks = get_attacks(piece, square, side) & (capture_mask | push_mask);
+//             while (attacks) {
+//                 destination = __builtin_ctzll(attacks);
+
+//                 moves_list.list[moves_list.count++] = encode_move(square, destination, piece, 0, 0, 0);
+//                 pop_lsb(attacks);
+//             }
+//             pop_lsb(pieces);
+//         }
+//     }
+
+//     /******************************************\
+//      *
+//      *             CASTLING MOVES
+//      *
+//     \******************************************/
+//     if (side == white && (attacked_squares & bitboards[K]) == 0) {
+//         // if castling is available and king is not in check
+//         if (castle & wk && ((attacked_squares | occupancies[both]) & castle_mask_wk) == 0) {
+//             moves_list.list[moves_list.count++] = encode_move(e1, g1, K, 0, 0, 1);
+//         }
+
+//         if (castle & wq && (attacked_squares & castle_attack_mask_wq) ==0 && (occupancies[both] & castle_piece_mask_wq) == 0 ) {
+//             moves_list.list[moves_list.count++] = encode_move(e1, c1, K, 0, 0, 1);
+//         }
+//     } else if (side == black && (attacked_squares & bitboards[k]) == 0) {
+//         if (castle & bk && ((attacked_squares | occupancies[both]) & castle_mask_bk) == 0) {
+//             moves_list.list[moves_list.count++] = encode_move(e8, g8, k, 0, 0, 1);
+//         }
+
+//         if (castle & bq && (attacked_squares & castle_attack_mask_bq) ==0 && (occupancies[both] & castle_piece_mask_bq) == 0 ) {
+//             moves_list.list[moves_list.count++] = encode_move(e8, c8, k, 0, 0, 1);
+//         }
+//     }
+// }
 
 int Skunk::get_piece(int square) {
     int type = -1;
@@ -1193,7 +1515,7 @@ int Skunk::quiesence(int alpha, int beta) {
     }
 
     // Sort the moves to improve search efficiency
-    // sort_moves(moves_list.moves, moves_list.count);
+    // sort_moves(moves_list.list, moves_list.count);
 
     int score = INT_MIN;
 
@@ -1311,12 +1633,10 @@ bool Skunk::should_do_null_move() {
 }
 
 // new negamax
-int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline) {
-    int best_move = 0, current_move, best_score = -INT_MAX, current_score, null_move_score;
-    bool fail_high = false, check = false;
-    t_line line = {.cmove = 0};
-
+int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, PVLine *pline) {
     nodes++;
+    int null_move_score;
+    bool fail_high = false, check=false;
 
     if ((nodes % time_check_node_interval) == 0) {
         communicate();
@@ -1324,26 +1644,18 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     if (force_stop) return 0;
 
+    check = is_check();
+
     if (depth < 1) {
         if (pline != nullptr) pline->cmove = 0;
         return quiesence(alpha, beta);
     }
 
-    if (ply && is_repetition()) {
-        return -evaluate() * 0.25;
-    }
-
-    // Transposition table lookup
-    TTEntry *entry = probe_transposition_table(zobrist);
-    if (entry != nullptr && !verify) {
-        if (entry->depth >= depth) {
+    #ifdef TRANSPOSITION_TABLE
+        TTEntry *entry = probe_transposition_table(zobrist);
+        if (entry != nullptr && entry->depth >= depth) {
             if (entry->type == EXACT) {
                 cache_hit++;
-                if (ply == 0 && pline != nullptr) {
-                    pline->argmove[0] = entry->move;
-                    memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
-                    pline->cmove = line.cmove + 1;
-                }
                 return entry->value;
             } else if (entry->type == LOWER_BOUND) {
                 alpha = std::max(alpha, (entry->value));
@@ -1355,19 +1667,33 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 return entry->value;
             }
         }
+    #endif
+
+    Moves moves_list;
+    generate_moves(moves_list);
+    sort_moves(&moves_list);
+
+    
+
+    if (ply && is_repetition()) {
+        return 0;
     }
 
-    Moves moves;
-    generate_moves(moves);
-    sort_moves(&moves);
-
-    check = is_check();
-
+    PVLine line = {.cmove = 0};
+    int best_move = 0, current_move, best_score = (float)INT_MIN, current_score;
     if (check) depth++;
 
-    // Null move pruning
+
+
+    // Verified null move and other code here...
+    // NULL move implemented from: https://arxiv.org/pdf/0808.1125.pdf
+#ifdef VERIFIED_NULL_MOVE
     if (!check && do_null == DO_NULL && (!verify || depth > 1)) {
+
+        // Save the current board state
         copy_board();
+
+        // Make a null move (switch sides without moving a piece)
         side ^= 1;
         zobrist ^= side_key;
         if (enpassant != no_square) {
@@ -1375,16 +1701,22 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
         enpassant = no_square;
 
+        // Increase the ply
         ply++;
 
+        
+        // Perform a reduced-depth search with the null move
         null_move_score = -negamax(-beta, -beta + 1, depth - 1 - NULL_R, verify, NO_NULL, nullptr);
 
+        // Decrease the ply and restore the previous board state
         ply--;
         restore_board();
 
+        // Check if the null move caused a beta-cutoff
         if (null_move_score >= beta) {
+
             if (verify) {
-                depth--;
+                depth --;
                 verify = false;
                 fail_high = true;
             } else {
@@ -1392,15 +1724,13 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
             }
         }
     }
+#endif
 
     copy_board();
-    int searched_moves = 0;
     int legal_moves = 0;
-
-    for (int i = 0; i < moves.count; i++) {
-        current_move = moves.list[i];
-
-
+    for (int i = 0; i < moves_list.count; i++) {
+        current_move = moves_list.list[i];
+        
         if (make_move(current_move) == false) {
             restore_board();
             continue;
@@ -1410,38 +1740,34 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         repitition.table[repitition.count++] = zobrist;
 
         re_search:
-        // Apply PVS and LMR
-        if (searched_moves == 0) {
+        if (i == 0) {
             current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
         } else {
-            if (searched_moves >= LMR_DEPTH && depth >= LMR_MIN_DEPTH && !check && !is_capture(current_move) && decode_promoted(current_move) == 0) {
-                // Apply LMR
-                current_score = -negamax(-alpha - 1, -alpha, depth - 1 - LMR_REDUCTION, verify, NO_NULL, &line);
-
-                if (current_score > alpha && current_score < beta) {
-                    // Re-search with full depth, as the move is better than expected
-                    current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
-                }
+            // Late Move Reductions (LMR)
+            if (i > 3 && depth > 2 && !check && is_capture(current_move) && decode_promoted(current_move) == 0) {
+                int LMR_R = 2;
+                current_score = -negamax(-alpha - 1, -alpha, depth - LMR_R, verify, NO_NULL, nullptr);
             } else {
-                // Apply PVS
-                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, &line);
+                current_score = alpha + 1;
+            }
 
+            // Principal Variation Search (PVS)
+            if (current_score > alpha) {
+                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, nullptr);
                 if (current_score > alpha && current_score < beta) {
-                    // Re-search with full window, as the move is better than expected
                     current_score = -negamax(-beta, -alpha, depth - 1, verify, DO_NULL, &line);
                 }
             }
         }
 
-        // Check for best score and move
         if (current_score > best_score) {
             best_score = current_score;
             best_move = current_move;
         }
 
-        // Null move verification re-check if no beta cut-off was found
+        // null move verification re-check if not beta cuttoff was found
         if (fail_high && current_score < beta) {
-            depth++;
+            depth ++;
             fail_high = false;
             verify = true;
             goto re_search;
@@ -1450,7 +1776,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         restore_board();
         ply--;
         repitition.count--;
-        searched_moves++;
+        moves--;
 
         if (best_score > alpha) {
             alpha = best_score;
@@ -1459,30 +1785,36 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 memcpy(pline->argmove + 1, line.argmove, line.cmove * sizeof(int));
                 pline->cmove = line.cmove + 1;
             }
+        }
 
-            if (alpha >= beta) {
-                // Update killer moves and history here...
-                #ifdef KILLER_HISTORY
-                if (!is_capture(current_move) && ply < MAX_PLY) {
-                    update_heuristics(ply, current_move, depth);
-                }
-                #endif
+        
 
-                #ifdef TRANSPOSITION_TABLE
-                store_transposition_table(zobrist, beta, depth, best_move, LOWER_BOUND);
-                #endif
-                return beta;
+        if (alpha >= beta) {
+            // Update killer moves and history here...
+#ifdef KILLER_HISTORY
+            // ADD mask ply check here to avoid segfaults
+            // if (!is_capture(current_move) && ply < MAX_PLY) {
+            //     history_moves[side][decode_source(current_move)][decode_destination(current_move)] += depth*depth;
+            //     killer_moves[1][ply] = killer_moves[0][ply];
+            //     killer_moves[0][ply] = current_move;
+            // }
+            if (!is_capture(current_move) && ply < MAX_PLY) {
+                update_heuristics(ply, current_move, depth);
             }
+#endif
+
+#ifdef TRANSPOSITION_TABLE
+            store_transposition_table(zobrist, beta, depth, best_move, LOWER_BOUND);
+#endif
+            return beta;
         }
     }
-
 
     if (legal_moves == 0) {
         return check ? (-CHECKMATE) + ply : 0;
     }
 
-    // Transposition table store
-    #ifdef TRANSPOSITION_TABLE
+#ifdef TRANSPOSITION_TABLE
     NodeType type;
     if (best_score <= alpha) {
         type = UPPER_BOUND;
@@ -1491,8 +1823,8 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     } else {
         type = EXACT;
     }
-    store_transposition_table(zobrist, best_score, depth, best_move, type);
-    #endif
+    store_transposition_table(zobrist, best_score, depth, best_move, type);    
+#endif
 
     return best_score;
 }
@@ -1507,7 +1839,7 @@ int Skunk::search(int maxDepth) {
 
 
     // iterate through deepening as we go
-    t_line pline = {.cmove = 0};
+    PVLine pline = {.cmove = 0};
 
     start_time = std::chrono::steady_clock::now();
 
@@ -1554,7 +1886,7 @@ int Skunk::search(int maxDepth) {
             std::cout << "info transpositions " << cache_hit << " stored_exact " << stored_exact << " stored_lower " << stored_lower << " stored_upper " << stored_upper << " t_stored " << stored_transpositions << " t_returned " << returned_transpositions << " exact_hits " << exact_hits << " lower_hits " << lower_hits << " upper_hits " << upper_hits << " alpha_hits " << alpha_cutoffs << " pruned: " << null_move_pruned << " score cp " << score << " depth " << depth + 1 << " nodes " << nodes << " time " << elapsed << " pv ";
         } 
         // copy this pline to the previous pline struct so we can use it in next search
-        memcpy(&previous_pv_line, &pline, sizeof(t_line));
+        memcpy(&previous_pv_line, &pline, sizeof(PVLine));
         // previous_pv_line = pline;
         // print pv lines
 
@@ -2274,10 +2606,10 @@ void Skunk::show_sort() {
         print_move(move);
         printf("\n");
     }
-    // sort_moves(moves_list.moves, moves_list.count);
+    // sort_moves(moves_list.list, moves_list.count);
     // printf("After sort:\n");
     // for (int i=0; i<moves_list.count; i++) {
-    //     print_move(moves_list.moves[i]);
+    //     print_move(moves_list.list[i]);
     //     printf("\n");
     // }
 }

@@ -202,12 +202,12 @@ typedef struct {
 typedef struct {
     int cmove;              // Number of t_moves in the line.
     int argmove[MAX_PLY];  // The line.
-}   t_line;
+}   PVLine;
 
 typedef struct {
     int move;
     int score;
-} t_result;
+} Result;
 
 
 typedef struct {
@@ -536,7 +536,7 @@ public:
 
 
 
-    t_line previous_pv_line;
+    PVLine previous_pv_line;
     
     
     TTEntry transpositionTable[HASH_SIZE];
@@ -573,7 +573,7 @@ public:
     int evaluate();
      int null_ok();
      int search(int maxDepth);
-     int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
+     int negamax(int alpha, int beta, int depth, int verify, int do_null, PVLine *pline);
      int quiesence(int alpha, int beta);
     void show_sort();
      bool is_check();
