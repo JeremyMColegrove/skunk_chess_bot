@@ -22,8 +22,6 @@
 #include <poll.h>
 #endif
 
-using namespace std;
-
 //Our bitboard type
 #define U64 unsigned long long
 
@@ -44,7 +42,7 @@ using namespace std;
 
 // flag for verified null move pruning
 
-#define VERIFIED_NULL_MOVE
+// #define VERIFIED_NULL_MOVE
 
 // alpha beta flag
 #define ALPHA_BETA
@@ -483,11 +481,20 @@ public:
     Skunk();
     ~Skunk();
 
-    void parse_fen(const string& fen);
+    void parse_fen(const std::string& fen);
     void print_bitboard(U64 board);
     void print_board();
     void print_attacks(int side);
-     bool is_promotion_square(int square, int side);
+    bool is_promotion_square(int square, int side);
+    int stored_transpositions = 0;
+    int returned_transpositions = 0;
+    int exact_hits = 0;
+    int lower_hits = 0;
+    int upper_hits = 0;
+    int alpha_cutoffs = 0;
+    int stored_exact = 0;
+    int stored_lower = 0;
+    int stored_upper = 0;
     U64 pawn_masks[2][64];
     U64 knight_masks[64];
     U64 king_masks[64];
@@ -560,9 +567,9 @@ public:
      void fill_occupancies();
     void generate_moves(Moves &moves);
      void print_move_detailed(int move);
-     int make_move(int move);
+     bool make_move(int move);
      int perft_test(int depth);
-    bool perft_test_position(const string &fen, int expected_result, int depth);
+    bool perft_test_position(const std::string &fen, int expected_result, int depth);
     int evaluate();
      int null_ok();
      int search(int maxDepth);
