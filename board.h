@@ -28,8 +28,14 @@
 // flag for enabling asserts in the code for debugging and error checking i.e. zobrist key checking
 //#define DEBUG
 
-// transposition table size
-#define HASH_SIZE (1 << 20)
+// transposition table size (256MB = ~10M entries)
+#define HASH_SIZE (1 << 24)
+
+// Late Move Pruning thresholds by depth
+const int LMP_THRESHOLD[] = {0, 4, 6, 10, 16, 22, 30, 40};
+
+// Aspiration window size
+#define ASPIRATION_WINDOW 50
 
 // flag for enabling the transposition table
 #define TRANSPOSITION_TABLE
@@ -47,8 +53,8 @@
 // alpha beta flag
 #define ALPHA_BETA
 
-#define LMR_DEPTH 4
-#define LMR_MIN_DEPTH 3
+#define LMR_DEPTH 3
+#define LMR_MIN_DEPTH 2
 #define LMR_REDUCTION 2
 
 /*********************\
@@ -429,7 +435,7 @@ public:
 
     // convert ASCII character pieces to encoded constants
 #ifndef _WIN32
-    char *unicode_pieces[12] = { "♙", "♘", "♗", "♖", "♕", "♔","♟︎", "♞", "♝", "♜", "♛", "♚" };
+    const char *unicode_pieces[12] = { "♙", "♘", "♗", "♖", "♕", "♔","♟︎", "♞", "♝", "♜", "♛", "♚" };
 #endif
 
 
@@ -525,6 +531,10 @@ public:
     // History table (for each piece type and destination square)
     int history_table[12][64];
 
+    // Counter move table [piece][destination] = best response move
+    int counter_moves[12][64];
+    int last_move = 0;  // Track the previous move made
+
     // repitition array for 3 move repitition
     t_repitition repitition;
 
@@ -573,7 +583,7 @@ public:
     inline bool is_check();
     inline int coordinate_to_square(char *coordinate);
     inline int score_move(int move);
-    void sort_moves(int *moves, int num_moves);
+    void sort_moves(int *moves, int num_moves, int tt_move = 0);
     inline unsigned int get_random_U32_number();
     inline U64 get_random_U64_number();
     inline U64 generate_zobrist();

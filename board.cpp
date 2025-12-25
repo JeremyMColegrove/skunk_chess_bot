@@ -241,7 +241,7 @@ void Skunk::construct_file_masks() {
     // left
     for (int square = 0; square < 64; square++) {
         mask = 0ULL;
-        if (square & 7 == 0) continue;
+        if ((square & 7) == 0) continue;
         for (int row = 0; row < 8; row++) {
             set_bit(mask, row * 8 + ((square-1) & 7));
         }
@@ -251,7 +251,7 @@ void Skunk::construct_file_masks() {
     // right
     for (int square = 0; square < 64; square++) {
         mask = 0ULL;
-        if (square & 7 == 7) continue;
+        if ((square & 7) == 7) continue;
         for (int row = 0; row < 8; row++) {
             set_bit(mask, row * 8 + ((square+1) & 7));
         }
@@ -714,7 +714,7 @@ void Skunk::print_board() {
     //print castling rights
     std::cout << "\nCastling: " << ((castle&wk) ? 'K':'-') << ((castle&wq)?'Q':'-') << ((castle&bk)?'k':'-') << ((castle&bq)?'q':'-') << std::endl;
 
-    printf("Positional score: %f\n", evaluate());
+    printf("Positional score: %d\n", evaluate());
 
     printf("Ply: %d\n", ply);
 }
@@ -1223,7 +1223,7 @@ void Skunk::print_moves(t_moves &moves_list)
 }
 
 void Skunk::init_heuristics() {
-    // Initialize killer moves and history table to zero
+    // Initialize killer moves, history table, and counter moves to zero
     for (int i = 0; i < MAX_PLY; ++i) {
         killer_moves[i][0] = -1;
         killer_moves[i][1] = -1;
@@ -1231,8 +1231,10 @@ void Skunk::init_heuristics() {
     for (int piece = P; piece <= k; ++piece) {
         for (int square = 0; square < 64; ++square) {
             history_table[piece][square] = 0;
+            counter_moves[piece][square] = 0;
         }
     }
+    last_move = 0;
 }
 
 // Update the killer moves and history table
@@ -1247,17 +1249,33 @@ void Skunk::update_heuristics(int ply, int move, int depth) {
     int piece = decode_piece(move);
     int destination = decode_destination(move);
     history_table[piece][destination] += depth * depth;
+
+    // Update counter move table: record this move as best response to last_move
+    if (last_move != 0) {
+        int prev_piece = decode_piece(last_move);
+        int prev_dest = decode_destination(last_move);
+        counter_moves[prev_piece][prev_dest] = move;
+    }
 }
 
-void Skunk::sort_moves(int *moves, int num_moves) {
-
-    std::sort(moves, moves + num_moves, [&](const int &a, const int &b) {
-
-        int a_score = score_move(a);
-        int b_score = score_move(b);
-
-        return a_score > b_score;
+void Skunk::sort_moves(int *moves, int num_moves, int tt_move) {
+    // Pre-compute scores to avoid O(n log n) score_move calls
+    std::pair<int, int> scored_moves[256];
+    for (int i = 0; i < num_moves; i++) {
+        int move = moves[i];
+        int score = score_move(move);
+        // TT move gets highest priority
+        if (move == tt_move) score += 30000;
+        scored_moves[i] = {score, move};
+    }
+    
+    std::sort(scored_moves, scored_moves + num_moves, [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+        return a.first > b.first;
     });
+    
+    for (int i = 0; i < num_moves; i++) {
+        moves[i] = scored_moves[i].second;
+    }
 }
 
 int Skunk::see(int move) {
@@ -1289,37 +1307,26 @@ int Skunk::see(int move) {
 }
 
 int Skunk::get_smallest_attacker(int to) {
-    // This function returns the move of the smallest attacker to the square 'to'
-    // Generate all moves for the opponent's pieces
-    t_moves moves_list;
-    moves_list.count = -1;
-    generate_moves(moves_list);
-
-    int smallest_attacker_value = INT_MAX;
-    int smallest_attacker_move = 0;
-
-    for (int i = 0; i < moves_list.count; i++) {
-        int move = moves_list.moves[i];
-
-        // Check if the move is a capture and the destination is the target square
-        if (is_capture(move) && decode_destination(move) == to) {
-            int attacker_piece = get_piece(decode_source(move));
-            int attacker_value = piece_scores[attacker_piece];
-
-            // Update the smallest attacker if the current attacker has a lower value
-            if (attacker_value < smallest_attacker_value) {
-                smallest_attacker_value = attacker_value;
-                smallest_attacker_move = move;
+    // Optimized: Use direct attack lookups instead of full move generation
+    // Pieces ordered by value (least to most valuable)
+    int piece_order[] = {P, N, B, R, Q, K};
+    
+    for (int i = 0; i < 6; i++) {
+        int piece = piece_order[i] + (side * 6);  // Adjust for current side
+        U64 piece_bb = bitboards[piece];
+        
+        while (piece_bb) {
+            int from = __builtin_ctzll(piece_bb);
+            U64 attacks = get_attacks(piece, from, side);
+            
+            if (attacks & (1ULL << to)) {
+                // This piece can attack the target square
+                return encode_move(from, to, piece, 0, 0, 0);
             }
+            pop_lsb(piece_bb);
         }
     }
-
-    // If there is no attacker, return 0
-    if (smallest_attacker_value == INT_MAX) {
-        return 0;
-    }
-
-    return smallest_attacker_move;
+    return 0;
 }
 
 
@@ -1345,16 +1352,8 @@ int Skunk::score_move(int move) {
     }
 
     // if it is a capture, use a piece victim lookup table
-    // if (is_capture(move)) {
-    //     score += mvv_lva[piece][victim] * 100;
-    // } 
-
-    // if it is a capture, use a piece victim lookup table
     if (is_capture(move)) {
         score += mvv_lva[piece][victim] * 100;
-        // Adjust capture score based on SEE value
-        int see_value = see(move);
-        score += see_value * 10;
     }
 
 #ifdef KILLER_HISTORY
@@ -1363,6 +1362,15 @@ int Skunk::score_move(int move) {
         score += 9000;
     } else if (move == killer_moves[ply][1]) {
         score += 8000;
+    }
+
+    // Counter move bonus: if this move is the recorded counter to the previous move
+    if (last_move != 0) {
+        int prev_piece = decode_piece(last_move);
+        int prev_dest = decode_destination(last_move);
+        if (move == counter_moves[prev_piece][prev_dest]) {
+            score += 7000;
+        }
     }
 
     // History heuristic
@@ -1381,23 +1389,10 @@ int Skunk::quiesence(int alpha, int beta) {
     q_nodes++;
     if (force_stop) return 0;
 
-    // Communicate with the user interface periodically
-    if ((nodes % time_check_node_interval) == 0) {
-        communicate();
-    }
+    // Calculate the evaluation score FIRST - most nodes cut off here
+    int evaluation = evaluate();
 
-    // Generate all legal moves
-    t_moves moves_list;
-    generate_moves(moves_list);
-
-    // Check if the king is in check
-    int check = is_check();
-
-    // Calculate the evaluation score
-    int evaluation = evaluate();// + static_cast<int>(log(moves_list.count + 1) * 0.5 * MOBILITY_WEIGHT) - (check ? KING_SAFETY_WEIGHT : 0);
-    
-
-    // Alpha-beta pruning
+    // Alpha-beta pruning (standing pat)
     if (evaluation >= beta) {
         return evaluation;
     }
@@ -1406,37 +1401,46 @@ int Skunk::quiesence(int alpha, int beta) {
         alpha = evaluation;
     }
 
-    // Sort the moves to improve search efficiency
-    sort_moves(moves_list.moves, moves_list.count);
+    // Generate moves only if we didn't cut off
+    t_moves moves_list;
+    generate_moves(moves_list);
+
+    // Check if the king is in check
+    int check = is_check();
+
+    // Extract only capture moves to avoid sorting non-captures
+    int captures[64];
+    int capture_count = 0;
+    for (int i = 0; i < moves_list.count; i++) {
+        if (is_capture(moves_list.moves[i])) {
+            captures[capture_count++] = moves_list.moves[i];
+        }
+    }
+
+    // No captures available
+    if (capture_count == 0) {
+        if (check && moves_list.count == 0) {
+            return -CHECKMATE + ply;
+        }
+        return alpha;
+    }
+
+    // Sort only capture moves
+    sort_moves(captures, capture_count);
 
     int score = INT_MIN;
 
-    bool made_capture = false;
-
-    for (int i = 0; i < moves_list.count; i++) {
-        int move = moves_list.moves[i];
-
-        // Only consider capture moves in quiescence search
-        if (!is_capture(move)) continue;
-
+    for (int i = 0; i < capture_count; i++) {
+        int move = captures[i];
         int victim = get_piece(decode_destination(move));
 
         #ifdef FUTILITY_PRUNE
-        // // Futility pruning: skip moves that are unlikely to improve the position
-        // if (!is_check() && (abs(piece_scores[victim]) + evaluation + piece_scores[Q] * 10) < alpha) {
-        //     return alpha;
-        // }
         // Futility pruning: skip moves that are unlikely to improve the position
-        int futility_margin = 100; // Adjust this value based on your engine's requirements
-        if (!is_check() && (evaluation + piece_scores[victim] + futility_margin <= alpha)) {
+        int futility_margin = 100;
+        if (!check && (evaluation + abs(piece_scores[victim]) + futility_margin <= alpha)) {
             continue;
         }
         #endif
-
-        
-
-        // Keep track of whether a capture move was made
-        made_capture = true;
 
         // Copy the board
         copy_board();
@@ -1462,11 +1466,6 @@ int Skunk::quiesence(int alpha, int beta) {
         if (score > alpha) {
             alpha = score;
         }
-    }
-
-    // If no legal capture moves and the king is in check, this is a checkmate
-    if (!made_capture && check) {
-        return -CHECKMATE + ply;
     }
 
     return alpha;
@@ -1505,8 +1504,8 @@ bool Skunk::should_do_null_move() {
     }
 
 
-    // side to move has too few of pieces
-    // if (num_major <= 3) return false;
+    // side to move has too few of pieces - avoid null move in endgame
+    if (num_major <= 1) return false;
 
     return true;
 }
@@ -1561,7 +1560,6 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
     t_moves moves_list;
     moves_list.count = -1;
     generate_moves(moves_list);
-    sort_moves(moves_list.moves, moves_list.count);
 
     check = is_check();
 
@@ -1569,10 +1567,39 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         return check ? (-CHECKMATE) + ply : 0;
     }
 
-    if (check) depth++;
+    // Check extension (only at shallow depths to avoid explosion)
+    if (check && depth <= 6) depth++;
+
+    // Get TT move for move ordering
+    int tt_move = (entry != nullptr) ? entry->move : 0;
+
+    // Determine if this is a PV node (full window search)
+    bool is_pv_node = (beta - alpha > 1);
+
+    // Reverse futility pruning (static null move pruning)
+    // If static eval is so good that even after giving the opponent a free move we're still winning
+    if (!check && !is_pv_node && depth <= 3 && !verify) {
+        int static_eval = evaluate();
+        int margin = 100 * depth;  // ~100 centipawns per depth
+        if (static_eval - margin >= beta) {
+            return static_eval - margin;
+        }
+    }
+
+    // Internal Iterative Deepening (IID)
+    // If we don't have a TT move, do a shallow search to find one
+    if (tt_move == 0 && depth >= 4 && is_pv_node) {
+        t_line iid_line = {.cmove = 0};
+        negamax(alpha, beta, depth - 2, verify, DO_NULL, &iid_line);
+        if (iid_line.cmove > 0) {
+            tt_move = iid_line.argmove[0];
+        }
+    }
+
+    sort_moves(moves_list.moves, moves_list.count, tt_move);
 
     // Null move pruning
-    if (!check && do_null == DO_NULL && (!verify || depth > 1)) {
+    if (!check && do_null == DO_NULL && (!verify || depth > 1) && should_do_null_move()) {
         copy_board();
         side ^= 1;
         zobrist ^= side_key;
@@ -1601,9 +1628,28 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
 
     copy_board();
     int searched_moves = 0;
+    bool is_quiet_move;
 
     for (int i = 0; i < moves_list.count; i++) {
         current_move = moves_list.moves[i];
+        is_quiet_move = !is_capture(current_move) && decode_promoted(current_move) == 0;
+
+        // Late Move Pruning (LMP): skip late quiet moves at shallow depth
+        if (!check && !is_pv_node && depth <= 7 && searched_moves >= LMP_THRESHOLD[depth] && is_quiet_move) {
+            continue;  // Skip this quiet move
+        }
+
+        // SEE pruning: skip obviously losing captures (after first few moves)
+        if (is_capture(current_move) && searched_moves > 0 && !is_pv_node && depth <= 4) {
+            if (see(current_move) < 0) {
+                continue;  // Skip losing capture
+            }
+        }
+
+        // Track last_move for counter move heuristic
+        int prev_last_move = last_move;
+        last_move = current_move;
+
         make_move(current_move, all_moves);
         ply++;
         repitition.table[repitition.count++] = zobrist;
@@ -1623,7 +1669,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
                 }
             } else {
                 // Apply PVS
-                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, NO_NULL, &line);
+                current_score = -negamax(-alpha - 1, -alpha, depth - 1, verify, DO_NULL, &line);
 
                 if (current_score > alpha && current_score < beta) {
                     // Re-search with full window, as the move is better than expected
@@ -1647,6 +1693,7 @@ int Skunk::negamax(int alpha, int beta, int depth, int verify, int do_null, t_li
         }
 
         restore_board();
+        last_move = prev_last_move;  // Restore for counter move heuristic
         ply--;
         repitition.count--;
         moves--;
@@ -1718,14 +1765,27 @@ int Skunk::search(int maxDepth) {
 
 
 
-    for (int depth = 0; depth < maxDepth; depth++) {
+    init_heuristics();
 
-        init_heuristics();
+    for (int depth = 0; depth < maxDepth; depth++) {
 
         ply = 0;
         pline.cmove = 0;
 
+        // Aspiration windows: after depth 4, use narrow window around previous score
+        if (depth >= 4) {
+            alpha = score - ASPIRATION_WINDOW;
+            beta = score + ASPIRATION_WINDOW;
+        }
+
         score = negamax(alpha, beta, depth + 1, 1, DO_NULL, &pline);
+
+        // Re-search with full window on fail-low or fail-high
+        if (!force_stop && (score <= alpha || score >= beta)) {
+            alpha = -INT_MAX;
+            beta = INT_MAX;
+            score = negamax(alpha, beta, depth + 1, 1, DO_NULL, &pline);
+        }
 
         if (force_stop) break;
 
@@ -1733,31 +1793,47 @@ int Skunk::search(int maxDepth) {
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start_time).count();
         
+        // Calculate NPS (nodes per second)
+        long nps = (elapsed > 0) ? (nodes * 1000 / elapsed) : nodes;
+        
+        // Standard UCI info format: depth, score, nodes, nps, time, pv
+        // Non-standard fields go at the end using "string" keyword
         if (score < -CHECKMATE + 2000) {
-            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit, ((float)cache_hit)/nodes, -(score + CHECKMATE) / 2 - 1, depth + 1, nodes, q_nodes, elapsed);
+            int mate_in = -(score + CHECKMATE) / 2 - 1;
+            std::cout << "info depth " << depth + 1 << " score mate " << mate_in 
+                      << " nodes " << nodes << " nps " << nps << " time " << elapsed << " pv ";
         } else if (score > CHECKMATE - 2000) {
-            printf("info transpositions %d ttp: %.4f score mate %d depth %d nodes %d q_nodes %d time %ld pv ", cache_hit,((float)cache_hit)/nodes, (CHECKMATE - score) / 2 + 1, depth + 1, nodes, q_nodes, elapsed);
+            int mate_in = (CHECKMATE - score) / 2 + 1;
+            std::cout << "info depth " << depth + 1 << " score mate " << mate_in 
+                      << " nodes " << nodes << " nps " << nps << " time " << elapsed << " pv ";
         } else {
-            std::cout << "info transpositions " << cache_hit << " pruned: " << null_move_pruned << " score cp " << score << " depth " << depth + 1 << " nodes " << nodes << " time " << elapsed << " pv ";
-        } 
+            std::cout << "info depth " << depth + 1 << " score cp " << score 
+                      << " nodes " << nodes << " nps " << nps << " time " << elapsed << " pv ";
+        }
+        
         // copy this pline to the previous pline struct so we can use it in next search
         memcpy(&previous_pv_line, &pline, sizeof(t_line));
-        // previous_pv_line = pline;
+        
         // print pv lines
-
         for (int i=0; i<previous_pv_line.cmove; i++) {
             print_move(previous_pv_line.argmove[i]);
             printf(" ");
         }
         std::cout << std::endl;
-
+        std::cout.flush();
     }
 
-
-    printf("bestmove ");
-    print_move(previous_pv_line.argmove[0]);
-    repitition.table[repitition.count++] = previous_pv_line.argmove[0]; // add this move into repetition table
-    printf("\n");
+    // Output bestmove - ensure we have a valid move
+    if (previous_pv_line.cmove > 0) {
+        printf("bestmove ");
+        print_move(previous_pv_line.argmove[0]);
+        repitition.table[repitition.count++] = previous_pv_line.argmove[0]; // add this move into repetition table
+        printf("\n");
+    } else {
+        // No move found - shouldn't happen but handle gracefully
+        printf("bestmove 0000\n");
+    }
+    fflush(stdout);
 
     return pline.argmove[0];
 }
@@ -1785,6 +1861,7 @@ int Skunk::evaluate() {
     int passed_pawn_score = 0;
     int mobility_score = 0;
     int king_safety_score = 0;
+    int positional_score = 0;
     float game_phase;
 
     // get total points on the board to taper endgame
@@ -1805,11 +1882,108 @@ int Skunk::evaluate() {
     mobility_score = calculate_mobility_score();
     king_safety_score = calculate_king_safety_score();
 
+    // ========== NEW EVALUATION FEATURES ==========
+
+    // Bishop pair bonus (~50 centipawns)
+    if (bit_count(bitboards[B]) >= 2) positional_score += 50;
+    if (bit_count(bitboards[b]) >= 2) positional_score -= 50;
+
+    // Rook on open/semi-open file
+    U64 white_pawns = bitboards[P];
+    U64 black_pawns = bitboards[p];
+    
+    U64 white_rooks = bitboards[R];
+    while (white_rooks) {
+        int sq = __builtin_ctzll(white_rooks);
+        int file = sq & 7;
+        U64 file_mask = file_masks[MIDDLE][file];
+        
+        // Open file (no pawns)
+        if (!(file_mask & (white_pawns | black_pawns))) {
+            positional_score += 25;
+        }
+        // Semi-open file (no friendly pawns)
+        else if (!(file_mask & white_pawns)) {
+            positional_score += 15;
+        }
+        pop_lsb(white_rooks);
+    }
+    
+    U64 black_rooks = bitboards[r];
+    while (black_rooks) {
+        int sq = __builtin_ctzll(black_rooks);
+        int file = sq & 7;
+        U64 file_mask = file_masks[MIDDLE][file];
+        
+        if (!(file_mask & (white_pawns | black_pawns))) {
+            positional_score -= 25;
+        } else if (!(file_mask & black_pawns)) {
+            positional_score -= 15;
+        }
+        pop_lsb(black_rooks);
+    }
+
+    // Connected rooks (on same rank or file with no pieces between)
+    if (bit_count(bitboards[R]) == 2) {
+        U64 rooks = bitboards[R];
+        int sq1 = __builtin_ctzll(rooks);
+        pop_lsb(rooks);
+        int sq2 = __builtin_ctzll(rooks);
+        // Same file or same rank
+        if ((sq1 & 7) == (sq2 & 7) || (sq1 >> 3) == (sq2 >> 3)) {
+            positional_score += 20;
+        }
+    }
+    if (bit_count(bitboards[r]) == 2) {
+        U64 rooks = bitboards[r];
+        int sq1 = __builtin_ctzll(rooks);
+        pop_lsb(rooks);
+        int sq2 = __builtin_ctzll(rooks);
+        if ((sq1 & 7) == (sq2 & 7) || (sq1 >> 3) == (sq2 >> 3)) {
+            positional_score -= 20;
+        }
+    }
+
+    // Knight outpost (knight protected by pawn, can't be attacked by enemy pawn)
+    U64 white_knights = bitboards[N];
+    while (white_knights) {
+        int sq = __builtin_ctzll(white_knights);
+        int rank = sq >> 3;
+        // Outpost squares are on ranks 3-5 (index 2-4 from white's perspective)
+        if (rank >= 2 && rank <= 4) {
+            // Check if protected by own pawn
+            if (pawn_masks[black][sq] & white_pawns) {
+                // Check if can't be attacked by enemy pawn (no enemy pawns on adjacent files ahead)
+                if (!(pawn_attack_span_masks[white][sq] & black_pawns)) {
+                    positional_score += 25;
+                }
+            }
+        }
+        pop_lsb(white_knights);
+    }
+    
+    U64 black_knights = bitboards[n];
+    while (black_knights) {
+        int sq = __builtin_ctzll(black_knights);
+        int rank = sq >> 3;
+        // Outpost squares for black are on ranks 4-6 (index 3-5)
+        if (rank >= 3 && rank <= 5) {
+            if (pawn_masks[white][sq] & black_pawns) {
+                if (!(pawn_attack_span_masks[black][sq] & white_pawns)) {
+                    positional_score -= 25;
+                }
+            }
+        }
+        pop_lsb(black_knights);
+    }
+
+    // ========== END NEW FEATURES ==========
+
     // Determine the game phase
     game_phase = calculate_game_phase(white_material_score + -black_material_score);
 
     // Combine the scores for each aspect, considering the game phase
-    int opening_score = material_score + pawn_structure_score + mobility_score + king_safety_score + square_occupancy_score;
+    int opening_score = material_score + pawn_structure_score + mobility_score + king_safety_score + square_occupancy_score + positional_score;
     int endgame_score = material_score + pawn_structure_score + square_occupancy_score_endgame;
 
     int score = opening_score * game_phase + endgame_score * (1.0f - game_phase);
@@ -1960,6 +2134,12 @@ int Skunk::calculate_pawn_structure_score() {
 }
 
 
+// 6.0f * log(i + 1)
+const int mobility_lookup[32] = {
+    0, 4, 6, 8, 9, 10, 11, 12, 13, 13, 14, 14, 15, 15, 16, 16,
+    17, 17, 17, 17, 18, 18, 18, 19, 19, 19, 19, 20, 20, 20, 20, 20
+};
+
 int Skunk::calculate_mobility_score() {
     int mobility_score = 0;
     int pieces[] = {N, R, B, n, r, b};
@@ -1972,9 +2152,13 @@ int Skunk::calculate_mobility_score() {
 
             // Get this piece's moves
             if (piece >= n) {
-                mobility_score -= log(bit_count(get_attacks(piece, square, black)) + 1) * evaluation_weights[MOBILITY_WEIGHT];
+                int count = bit_count(get_attacks(piece, square, black));
+                if (count > 31) count = 31;
+                mobility_score -= mobility_lookup[count];
             } else {
-                mobility_score += log(bit_count(get_attacks(piece, square, white)) + 1) * evaluation_weights[MOBILITY_WEIGHT];
+                int count = bit_count(get_attacks(piece, square, white));
+                if (count > 31) count = 31;
+                mobility_score += mobility_lookup[count];
             }
             pop_lsb(bitboard);
         }
@@ -2100,6 +2284,12 @@ void Skunk::parse_go(const std::string& cmd) {
     move_time = 0;
     btime = 0;
     wtime = 0;
+    winc = 0;
+    binc = 0;
+    int movestogo = 0;
+    int nodes_limit = 0;
+    bool infinite = false;
+    bool ponder = false;
 
     std::stringstream ss(cmd);
     std::string token;
@@ -2112,27 +2302,68 @@ void Skunk::parse_go(const std::string& cmd) {
             ss >> wtime;
         } else if (token == "btime") {
             ss >> btime;
+        } else if (token == "winc") {
+            ss >> winc;
+        } else if (token == "binc") {
+            ss >> binc;
+        } else if (token == "movestogo") {
+            ss >> movestogo;
+        } else if (token == "nodes") {
+            ss >> nodes_limit;
+        } else if (token == "infinite") {
+            infinite = true;
+        } else if (token == "ponder") {
+            ponder = true;
         }
     }
 
+    // Reset force_stop for new search
+    force_stop = 0;
+
     // Check which type of search to do
-    if (move_time > 0) {
+    if (infinite || ponder) {
+        // Infinite search - search until "stop" command
+        move_time = 0;  // No time limit
+        search(INT_MAX);
+    } else if (move_time > 0) {
+        // Fixed movetime search
         search(INT_MAX);
     } else if (search_depth > 0) {
         // Do a depth-limited search
         search(search_depth);
-    } else if (wtime > 0 && btime > 0) {
-        // calculate movetime intelligently
-        move_time = 1000;
-
-        if (side == white) {
-            move_time = std::min(DEFAULT_MOVETIME, wtime);
+    } else if (wtime > 0 || btime > 0) {
+        // Time control search - calculate movetime intelligently
+        int time_left = (side == white) ? wtime : btime;
+        int inc = (side == white) ? winc : binc;
+        
+        if (movestogo > 0) {
+            // We have a specific number of moves to make
+            move_time = time_left / movestogo;
+            // Add some increment time but keep a buffer
+            move_time += inc * 3 / 4;
         } else {
-            move_time = std::min(DEFAULT_MOVETIME, btime);
+            // Sudden death or unknown moves remaining
+            // Assume approximately 30 moves remaining
+            move_time = time_left / 30;
+            // Add increment time
+            move_time += inc * 3 / 4;
         }
         
-        // printf("%d\n", move_time);
+        // Never use more than half of remaining time
+        move_time = std::min(move_time, time_left / 2);
+        
+        // Ensure minimum search time of 50ms if we have time
+        if (time_left > 100) {
+            move_time = std::max(move_time, 50);
+        }
+        
+        // Cap at default movetime  
+        move_time = std::min(move_time, DEFAULT_MOVETIME);
+        
         search(INT_MAX);
+    } else {
+        // No constraints given - do a reasonable depth search
+        search(10);
     }
 }
 
@@ -2279,6 +2510,7 @@ int Skunk::perft_test(int depth) {
     // }
     // printf("Nodes: %lld\nTime: %d\nNPS: %d\n", perft_results.total_nodes, elapsed, per_second*1000);
     // return perft_results.nodes[1];
+    return nodes;
 }
 
 bool Skunk::perft_test_position(const std::string &fen, int expected_result, int depth) {

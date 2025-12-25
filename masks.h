@@ -132,7 +132,7 @@
 		a  b  c  d  e  f  g  h
 		Board number: 18374686479671623680
  */
-#define row1 18374686479671623680
+#define row1 18374686479671623680ULL
 
 /**
  * castling mask

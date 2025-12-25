@@ -128,25 +128,31 @@ void parse_command(const std::string& cmd, Skunk* skunk) {
         std::cout << "id name Skunk" << std::endl;
         std::cout << "id author Jeremy Colegrove" << std::endl;
         std::cout << "uciok" << std::endl;
+        std::cout.flush();
     } else if (cmd == "isready") {
         // Respond to the "isready" command by indicating that the engine is ready
         std::cout << "readyok" << std::endl;
+        std::cout.flush();
     } else if (cmd.substr(0, 9) == "setoption") {
         // Parse and process any options sent with the "setoption" command
-        // ...
+        // Currently no options are supported
     } else if (cmd.substr(0, 8) == "position") {
         // Parse and set the position on the board sent with the "position" command
         skunk->parse_position(cmd);
     } else if (cmd.substr(0, 2) == "go") {
         // Parse and set the search parameters sent with the "go" command
-        // ...
         // Start the search and print the best move when it is finished
         skunk->parse_go(cmd);
     } else if (cmd.substr(0, 10) == "ucinewgame") {
+        // Reset to starting position and clear transposition table
         skunk->parse_position("position startpos");
+        // Clear transposition table for new game
+        memset(skunk->transpositionTable, 0, sizeof(skunk->transpositionTable));
     } else if (cmd == "stop") {
         // Stop the search in response to the "stop" command
-        // ...
+        skunk->force_stop = 1;
+    } else if (cmd == "ponderhit") {
+        // Switch from pondering to normal search (not implemented - just continue)
     } else if (cmd == "quit") {
         // Exit the program in response to the "quit" command
         exit(0);
@@ -160,6 +166,7 @@ void parse_command(const std::string& cmd, Skunk* skunk) {
         skunk->print_moves(moves);
     } else if (cmd == "score") {
         std::cout << skunk->evaluate() << std::endl;
+        std::cout.flush();
     } else if (cmd == "sort") {
         skunk->show_sort();
     }
