@@ -1,6 +1,5 @@
 import subprocess
 import time
-import re
 
 def run_engine_test():
     process = subprocess.Popen(
@@ -11,11 +10,13 @@ def run_engine_test():
         text=True
     )
 
+    # Test the position where bishop sacrifice bug occurs
+    # Black to move - should NOT sacrifice bishop for pawn
     commands = [
         "uci",
         "isready",
-        "position startpos",
-        "go depth 8"
+        "position fen r2qkb1r/ppp1pppp/2n2n2/3p1b2/3P1BP1/2N2N1P/PPP1PP2/R2QKB1R b KQkq - 0 6",
+        "go depth 7"
     ]
 
     start_time = time.time()
@@ -33,8 +34,8 @@ def run_engine_test():
         if "bestmove" in line:
             break
         
-        # Timeout after 30 seconds
-        if time.time() - start_time > 30: 
+        # Timeout after 60 seconds
+        if time.time() - start_time > 60: 
             print("Timeout!")
             process.kill()
             break

@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <iostream>
+#include "types.h"
 #include "masks.h"
 #include "piece_tables.h"
 #ifdef _WIN32
@@ -22,20 +24,8 @@
 #include <poll.h>
 #endif
 
-//Our bitboard type
-#define U64 unsigned long long
-
 // flag for enabling asserts in the code for debugging and error checking i.e. zobrist key checking
 //#define DEBUG
-
-// transposition table size (256MB = ~10M entries)
-#define HASH_SIZE (1 << 24)
-
-// Late Move Pruning thresholds by depth
-const int LMP_THRESHOLD[] = {0, 4, 6, 10, 16, 22, 30, 40};
-
-// Aspiration window size
-#define ASPIRATION_WINDOW 50
 
 // flag for enabling the transposition table
 #define TRANSPOSITION_TABLE
@@ -47,200 +37,30 @@ const int LMP_THRESHOLD[] = {0, 4, 6, 10, 16, 22, 30, 40};
 #define FUTILITY_PRUNE
 
 // flag for verified null move pruning
-
 #define VERIFIED_NULL_MOVE
 
 // alpha beta flag
 #define ALPHA_BETA
 
-#define LMR_DEPTH 3
-#define LMR_MIN_DEPTH 2
-#define LMR_REDUCTION 2
-
-/*********************\
-       CONSTANTS
-\*********************/
-
-#define MAX_PLY 72
-#define CHECKMATE 500000
-#define NULL_R 3
-#define DO_NULL 1
-#define NO_NULL 0
-#define HASH_EXACT 0
-#define HASH_LOWERBOUND 1
-#define HASH_UPPERBOUND 2
-#define DEFAULT_MOVETIME 2500 // how many ms to search for
-
-
-
-/*********************\
-    BITWISE MACROS
-\*********************/
-
-//Returns the bit on the square
-#define get_bit(bitboard, square) ((bitboard) & (1ULL << (square)))
-
-//Turns the bit at square to 1
-#define set_bit(bitboard, square) ((bitboard) |= (1ULL << (square)))
-
-//Turns the bit at square to 0
-#define pop_bit(bitboard, square) ((bitboard) &= ~(1ULL << (square)))
-
-// pops off the ls1b. This is a faster operation that pop_bit so use this whenever you can
-#define pop_lsb(bitboard) (bitboard &= (bitboard-1))
-
-//encodes a move
-/* | castling enp d_push capture promoted piece  dest   source
- * | 0        0   0      0000    0000     000000 000000 000000
- */
-#define encode_move(source, destination, piece, promoted, enpassant, castling) \
-    (source) |                                                                                  \
-    (destination << 6) |                                                                        \
-    (piece << 12) |                                                                             \
-    (promoted << 16) |                                                                          \
-    (enpassant << 22) |                                                                         \
-    (castling << 23)
-
-
-#define MAX_PERFT_DEPTH 24
-#define decode_source(move) ((move) & 0x3f)
-#define decode_destination(move) (((move) & 0xfc0) >> 6)
-#define decode_piece(move) (((move) & 0xf000) >> 12)
-#define decode_promoted(move) (((move) & 0xf0000) >> 16)
+// is_capture macro (needs occupancies and side from Skunk class)
 #define is_capture(move) ((1ULL << decode_destination(move)) & occupancies[side ^ 1] || decode_enpassant(move))
-#define decode_enpassant(move) ((move) & 0x400000)
-#define decode_castle(move) ((move) & 0x800000)
 
-
+// copy/restore board macros (need class member access)
 #define copy_board() \
 U64 bitboards_copy[12], occupancies_copy[3]; \
 int castle_copy=0, side_copy=0, enpassant_copy=0, piece_count_copy[12]; \
 memcpy(bitboards_copy, bitboards, sizeof(bitboards)); \
 memcpy(occupancies_copy, occupancies, sizeof(occupancies)); \
-memcpy(piece_count_copy, piece_count, sizeof(piece_count));                     \
+memcpy(piece_count_copy, piece_count, sizeof(piece_count)); \
 enpassant_copy = enpassant; castle_copy = castle; side_copy = side; \
-U64 zobrist_copy = zobrist; \
+U64 zobrist_copy = zobrist;
 
 #define restore_board() \
     memcpy(bitboards, bitboards_copy, sizeof(bitboards)); \
     memcpy(occupancies, occupancies_copy,  sizeof(occupancies)); \
-    memcpy(piece_count, piece_count_copy, sizeof(piece_count));                    \
+    memcpy(piece_count, piece_count_copy, sizeof(piece_count)); \
     enpassant = enpassant_copy; castle = castle_copy; side = side_copy; \
-    zobrist = zobrist_copy; \
-
-
-/*********************\
-     ENUMERATIONS
-\*********************/
-
-enum EvaluationWeights {
-    MATERIAL_WEIGHT,
-    PIECE_SCORE_WEIGHT,
-    DOUBLED_PAWNS_WEIGHT,
-    ISOLATED_PAWNS_WEIGHT,
-    PASSED_PAWN_WEIGHT,
-    MOBILITY_WEIGHT,
-    KING_SAFETY_WEIGHT,
-    NUM_WEIGHTS
-};
-
-const int piece_scores[12] = {
-    100, // Pawn (P)
-    320, // Knight (N)
-    330, // Bishop (B)
-    500, // Rook (R)
-    900, // Queen (Q)
-    0,   // King (K) (not used in the evaluation function)
-    -100, // Pawn (p)
-    -320, // Knight (n)
-    -330, // Bishop (b)
-    -500, // Rook (r)
-    -900, // Queen (q)
-    0    // King (k) (not used in the evaluation function)
-};
-
-// enum {PIECE_SCORE_WEIGHT, SQUARE_SCORE_WEIGHT, DOUBLED_PAWNS_WEIGHT, ISOLATED_PAWNS_WEIGHT, PASSED_PAWN, MOBILITY_WEIGHT, KING_SAFETY_WEIGHT, CASTLE_WEIGHT};
-
-enum {all_moves, only_captures};
-
-enum {
-    a8, b8, c8, d8, e8, f8, g8, h8,
-    a7, b7, c7, d7, e7, f7, g7, h7,
-    a6, b6, c6, d6, e6, f6, g6, h6,
-    a5, b5, c5, d5, e5, f5, g5, h5,
-    a4, b4, c4, d4, e4, f4, g4, h4,
-    a3, b3, c3, d3, e3, f3, g3, h3,
-    a2, b2, c2, d2, e2, f2, g2, h2,
-    a1, b1, c1, d1, e1, f1, g1, h1, no_square
-};
-
-enum {LEFT=0, MIDDLE=1, RIGHT=2};
-
-enum { black, white, both };
-
-//Encode the pieces here as they would be output to the screen
-enum {P, N, B, R, Q, K, p, n, b, r, q, k};
-
-// set up so the opposite direction is at index 7-i
-enum {DE, DN, DNW, DNE, DSW, DSE, DS, DW};
-
-//    0001    0010,   0100,   1000
-enum {wk = 1, wq = 2, bk = 4, bq = 8};
-
-const char ascii_pieces[] = "PNBRQKpnbrqk";
-
-/*********************\
-       STRUCTS
-\*********************/
-
-// transposition table
-struct TTEntry {
-    U64 zobristKey;
-    int value;
-    int move;
-    int16_t depth;
-    uint8_t type;
-};
-
-typedef struct {
-    int moves[256];
-    int count;
-    int contains_castle;
-} t_moves;
-
-typedef struct {
-    int cmove;              // Number of t_moves in the line.
-    int argmove[MAX_PLY];  // The line.
-}   t_line;
-
-typedef struct {
-    int move;
-    int score;
-} t_result;
-
-
-typedef struct {
-    long long int total_nodes;
-    int nodes[MAX_PERFT_DEPTH]; // handle up to 24 levels
-    int captures[MAX_PERFT_DEPTH];
-    int castles[MAX_PERFT_DEPTH];
-    int promotions[MAX_PERFT_DEPTH];
-    int checks[MAX_PERFT_DEPTH];
-    int discovered_checks[MAX_PERFT_DEPTH];
-    int double_checks[MAX_PERFT_DEPTH];
-    int checkmates[MAX_PERFT_DEPTH];
-    int enpassants[MAX_PERFT_DEPTH];
-} perft;
-
-typedef struct {
-    int count;
-    U64 ray;
-} t_attackers;
-
-typedef struct {
-    U64 table[500];
-    int count;
-} t_repitition;
+    zobrist = zobrist_copy;
 
 
 /*********************\
@@ -549,47 +369,47 @@ public:
     void store_transposition_table(U64 zobristKey, int16_t value, int16_t depth, int move, NodeType type);
 
     int get_time_ms();
-    inline int is_repetition();
+    int is_repetition();
     void init_precomputed_masks();
     U64 pawn_attack_span(int color, int square);
     void update_heuristics(int ply, int move, int depth);
-    inline void init_heuristics();
-    inline void construct_rays();
-    inline void construct_file_masks();
-    inline void construct_direction_rays();
-    inline U64 construct_bishop_attacks(int square, U64 blockers);
-    inline U64 construct_rook_attacks(int square, U64 blockers);
-    inline U64 get_rook_attacks(int square, U64 occupancy);
-    inline U64 get_bishop_attacks(int square, U64 occupancy);
-    inline U64 get_queen_attacks(int square, U64 occupancy);
-    inline bool is_square_attacked(int square, int side);
-    inline U64 get_slider_attacks();
-    inline U64 get_jumper_attacks();
+    void init_heuristics();
+    void construct_rays();
+    void construct_file_masks();
+    void construct_direction_rays();
+    U64 construct_bishop_attacks(int square, U64 blockers);
+    U64 construct_rook_attacks(int square, U64 blockers);
+    U64 get_rook_attacks(int square, U64 occupancy);
+    U64 get_bishop_attacks(int square, U64 occupancy);
+    U64 get_queen_attacks(int square, U64 occupancy);
+    bool is_square_attacked(int square, int side);
+    U64 get_slider_attacks();
+    U64 get_jumper_attacks();
     int bit_count(U64 board);
     int get_ls1b_index(U64 board);
     U64 set_occupancy(int index, int bits_in_mask, U64 attack_mask);
-    inline void fill_occupancies();
-    inline void generate_moves(t_moves &moves_list);
-    inline void print_move_detailed(int move);
-    inline int make_move(int move, int move_flag);
-    inline int perft_test(int depth);
+    void fill_occupancies();
+    void generate_moves(t_moves &moves_list);
+    void print_move_detailed(int move);
+    int make_move(int move, int move_flag);
+    int perft_test(int depth);
     bool perft_test_position(const std::string &fen, int expected_result, int depth);
     int evaluate();
-    inline int null_ok();
-    inline int search(int maxDepth);
-    inline int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
-    inline int quiesence(int alpha, int beta);
+    int null_ok();
+    int search(int maxDepth);
+    int negamax(int alpha, int beta, int depth, int verify, int do_null, t_line *pline);
+    int quiesence(int alpha, int beta, int qs_ply = 0);
     void show_sort();
-    inline bool is_check();
-    inline int coordinate_to_square(char *coordinate);
-    inline int score_move(int move);
+    bool is_check();
+    int coordinate_to_square(char *coordinate);
+    int score_move(int move);
     void sort_moves(int *moves, int num_moves, int tt_move = 0);
-    inline unsigned int get_random_U32_number();
-    inline U64 get_random_U64_number();
-    inline U64 generate_zobrist();
-    inline void print_move(int move);
-    inline void init();
-    inline void test_moves_sort();
+    unsigned int get_random_U32_number();
+    U64 get_random_U64_number();
+    U64 generate_zobrist();
+    void print_move(int move);
+    void init();
+    void test_moves_sort();
     void print_moves(t_moves &moves_list);
 
     // time functions to incorporate time checking
@@ -648,9 +468,7 @@ public:
 private:
     void perft_test_helper(int depth);
 
-    //Functions for getting each pieces valid t_moves (takes whose turn it should calculate for)
-    //State for our pseudo random number generator
-    //All of our bitboards
+    // Functions for getting each pieces valid t_moves
     void construct_pawn_tables();
     void construct_knight_masks();
     void construct_king_tables();
@@ -659,14 +477,28 @@ private:
     void construct_slider_attacks();
     void add_move(t_moves &moves_list, int move);
     void clear_moves();
+    
+    // Evaluation helpers
     int calculate_material_score();
     int calculate_square_occupancy_score();
     int calculate_square_occupancy_score_endgame();
+    int calculate_square_occupancy_score_impl(const int* tables[6]);
     int calculate_pawn_structure_score();
     int calculate_passed_pawn_score();
     int calculate_mobility_score();
     int calculate_king_safety_score();
+    int calculate_side_king_distance(int king_square, int start_piece, int end_piece);
+    int evaluate_rooks_on_files(int rook_piece, U64 own_pawns, U64 enemy_pawns);
+    int evaluate_knight_outposts(int knight_piece, int color);
+    int evaluate_connected_rooks(int rook_piece);
+    int evaluate_passed_pawns();
+    int evaluate_pawn_shield();
+    int evaluate_backward_pawns();
+    int evaluate_rook_on_7th();
+    int evaluate_bishop_outposts();
+    int evaluate_space();
     float calculate_game_phase(int material_score);
+    
     int castle = 0;
     int full_moves = 0;
     int ply = 0;

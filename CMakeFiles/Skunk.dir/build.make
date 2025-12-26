@@ -100,19 +100,67 @@ CMakeFiles/Skunk.dir/board.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/Skunk.dir/board.cpp.s"
 	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Github/skunk_chess_bot/board.cpp -o CMakeFiles/Skunk.dir/board.cpp.s
 
+CMakeFiles/Skunk.dir/evaluation.cpp.o: CMakeFiles/Skunk.dir/flags.make
+CMakeFiles/Skunk.dir/evaluation.cpp.o: evaluation.cpp
+CMakeFiles/Skunk.dir/evaluation.cpp.o: CMakeFiles/Skunk.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/Skunk.dir/evaluation.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/Skunk.dir/evaluation.cpp.o -MF CMakeFiles/Skunk.dir/evaluation.cpp.o.d -o CMakeFiles/Skunk.dir/evaluation.cpp.o -c /Users/jeremy/Documents/Github/skunk_chess_bot/evaluation.cpp
+
+CMakeFiles/Skunk.dir/evaluation.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/Skunk.dir/evaluation.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jeremy/Documents/Github/skunk_chess_bot/evaluation.cpp > CMakeFiles/Skunk.dir/evaluation.cpp.i
+
+CMakeFiles/Skunk.dir/evaluation.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/Skunk.dir/evaluation.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Github/skunk_chess_bot/evaluation.cpp -o CMakeFiles/Skunk.dir/evaluation.cpp.s
+
+CMakeFiles/Skunk.dir/search.cpp.o: CMakeFiles/Skunk.dir/flags.make
+CMakeFiles/Skunk.dir/search.cpp.o: search.cpp
+CMakeFiles/Skunk.dir/search.cpp.o: CMakeFiles/Skunk.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/Skunk.dir/search.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/Skunk.dir/search.cpp.o -MF CMakeFiles/Skunk.dir/search.cpp.o.d -o CMakeFiles/Skunk.dir/search.cpp.o -c /Users/jeremy/Documents/Github/skunk_chess_bot/search.cpp
+
+CMakeFiles/Skunk.dir/search.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/Skunk.dir/search.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jeremy/Documents/Github/skunk_chess_bot/search.cpp > CMakeFiles/Skunk.dir/search.cpp.i
+
+CMakeFiles/Skunk.dir/search.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/Skunk.dir/search.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Github/skunk_chess_bot/search.cpp -o CMakeFiles/Skunk.dir/search.cpp.s
+
+CMakeFiles/Skunk.dir/uci.cpp.o: CMakeFiles/Skunk.dir/flags.make
+CMakeFiles/Skunk.dir/uci.cpp.o: uci.cpp
+CMakeFiles/Skunk.dir/uci.cpp.o: CMakeFiles/Skunk.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object CMakeFiles/Skunk.dir/uci.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/Skunk.dir/uci.cpp.o -MF CMakeFiles/Skunk.dir/uci.cpp.o.d -o CMakeFiles/Skunk.dir/uci.cpp.o -c /Users/jeremy/Documents/Github/skunk_chess_bot/uci.cpp
+
+CMakeFiles/Skunk.dir/uci.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/Skunk.dir/uci.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/jeremy/Documents/Github/skunk_chess_bot/uci.cpp > CMakeFiles/Skunk.dir/uci.cpp.i
+
+CMakeFiles/Skunk.dir/uci.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/Skunk.dir/uci.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/jeremy/Documents/Github/skunk_chess_bot/uci.cpp -o CMakeFiles/Skunk.dir/uci.cpp.s
+
 # Object files for target Skunk
 Skunk_OBJECTS = \
 "CMakeFiles/Skunk.dir/main.cpp.o" \
-"CMakeFiles/Skunk.dir/board.cpp.o"
+"CMakeFiles/Skunk.dir/board.cpp.o" \
+"CMakeFiles/Skunk.dir/evaluation.cpp.o" \
+"CMakeFiles/Skunk.dir/search.cpp.o" \
+"CMakeFiles/Skunk.dir/uci.cpp.o"
 
 # External object files for target Skunk
 Skunk_EXTERNAL_OBJECTS =
 
 Skunk: CMakeFiles/Skunk.dir/main.cpp.o
 Skunk: CMakeFiles/Skunk.dir/board.cpp.o
+Skunk: CMakeFiles/Skunk.dir/evaluation.cpp.o
+Skunk: CMakeFiles/Skunk.dir/search.cpp.o
+Skunk: CMakeFiles/Skunk.dir/uci.cpp.o
 Skunk: CMakeFiles/Skunk.dir/build.make
 Skunk: CMakeFiles/Skunk.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Linking CXX executable Skunk"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Linking CXX executable Skunk"
 	$(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/Skunk.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.

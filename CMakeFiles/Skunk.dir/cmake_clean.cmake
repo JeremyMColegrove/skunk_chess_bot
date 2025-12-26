@@ -1,8 +1,14 @@
 file(REMOVE_RECURSE
   "CMakeFiles/Skunk.dir/board.cpp.o"
   "CMakeFiles/Skunk.dir/board.cpp.o.d"
+  "CMakeFiles/Skunk.dir/evaluation.cpp.o"
+  "CMakeFiles/Skunk.dir/evaluation.cpp.o.d"
   "CMakeFiles/Skunk.dir/main.cpp.o"
   "CMakeFiles/Skunk.dir/main.cpp.o.d"
+  "CMakeFiles/Skunk.dir/search.cpp.o"
+  "CMakeFiles/Skunk.dir/search.cpp.o.d"
+  "CMakeFiles/Skunk.dir/uci.cpp.o"
+  "CMakeFiles/Skunk.dir/uci.cpp.o.d"
   "Skunk"
   "Skunk.pdb"
 )

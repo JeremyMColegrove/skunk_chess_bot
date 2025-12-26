@@ -85,12 +85,12 @@ clean: CMakeFiles/Skunk.dir/clean
 CMakeFiles/Skunk.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=1,2,3 "Built target Skunk"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=1,2,3,4,5,6 "Built target Skunk"
 .PHONY : CMakeFiles/Skunk.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/Skunk.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles 3
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles 6
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/Skunk.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles 0
 .PHONY : CMakeFiles/Skunk.dir/rule
@@ -102,7 +102,7 @@ Skunk: CMakeFiles/Skunk.dir/rule
 # codegen rule for target.
 CMakeFiles/Skunk.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=1,2,3 "Finished codegen for target Skunk"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/jeremy/Documents/Github/skunk_chess_bot/CMakeFiles --progress-num=1,2,3,4,5,6 "Finished codegen for target Skunk"
 .PHONY : CMakeFiles/Skunk.dir/codegen
 
 # clean rule for target.

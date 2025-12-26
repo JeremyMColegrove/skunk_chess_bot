@@ -153,6 +153,30 @@ board.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/board.cpp.s
 .PHONY : board.cpp.s
 
+evaluation.o: evaluation.cpp.o
+.PHONY : evaluation.o
+
+# target to build an object file
+evaluation.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/evaluation.cpp.o
+.PHONY : evaluation.cpp.o
+
+evaluation.i: evaluation.cpp.i
+.PHONY : evaluation.i
+
+# target to preprocess a source file
+evaluation.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/evaluation.cpp.i
+.PHONY : evaluation.cpp.i
+
+evaluation.s: evaluation.cpp.s
+.PHONY : evaluation.s
+
+# target to generate assembly for a file
+evaluation.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/evaluation.cpp.s
+.PHONY : evaluation.cpp.s
+
 main.o: main.cpp.o
 .PHONY : main.o
 
@@ -177,6 +201,54 @@ main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+search.o: search.cpp.o
+.PHONY : search.o
+
+# target to build an object file
+search.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/search.cpp.o
+.PHONY : search.cpp.o
+
+search.i: search.cpp.i
+.PHONY : search.i
+
+# target to preprocess a source file
+search.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/search.cpp.i
+.PHONY : search.cpp.i
+
+search.s: search.cpp.s
+.PHONY : search.s
+
+# target to generate assembly for a file
+search.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/search.cpp.s
+.PHONY : search.cpp.s
+
+uci.o: uci.cpp.o
+.PHONY : uci.o
+
+# target to build an object file
+uci.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/uci.cpp.o
+.PHONY : uci.cpp.o
+
+uci.i: uci.cpp.i
+.PHONY : uci.i
+
+# target to preprocess a source file
+uci.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/uci.cpp.i
+.PHONY : uci.cpp.i
+
+uci.s: uci.cpp.s
+.PHONY : uci.s
+
+# target to generate assembly for a file
+uci.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Skunk.dir/build.make CMakeFiles/Skunk.dir/uci.cpp.s
+.PHONY : uci.cpp.s
+
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -189,9 +261,18 @@ help:
 	@echo "... board.o"
 	@echo "... board.i"
 	@echo "... board.s"
+	@echo "... evaluation.o"
+	@echo "... evaluation.i"
+	@echo "... evaluation.s"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... search.o"
+	@echo "... search.i"
+	@echo "... search.s"
+	@echo "... uci.o"
+	@echo "... uci.i"
+	@echo "... uci.s"
 .PHONY : help
 
 

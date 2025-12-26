@@ -1003,6 +1003,7 @@ CMakeFiles/Skunk.dir/main.cpp.o: \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/atomic_unique_lock.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/intrusive_list_view.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/c++/v1/__stop_token/stop_token.h \
+  /Users/jeremy/Documents/Github/skunk_chess_bot/types.h \
   /Users/jeremy/Documents/Github/skunk_chess_bot/masks.h \
   /Users/jeremy/Documents/Github/skunk_chess_bot/piece_tables.h \
   /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/sys/unistd.h \

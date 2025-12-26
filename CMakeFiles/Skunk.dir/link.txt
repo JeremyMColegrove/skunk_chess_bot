@@ -1,1 +1,1 @@
-/usr/bin/c++  -O3 -march=native -flto -fno-exceptions -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/Skunk.dir/main.cpp.o CMakeFiles/Skunk.dir/board.cpp.o -o Skunk
+/usr/bin/c++  -O3 -march=native -flto -fno-exceptions -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/Skunk.dir/main.cpp.o CMakeFiles/Skunk.dir/board.cpp.o CMakeFiles/Skunk.dir/evaluation.cpp.o CMakeFiles/Skunk.dir/search.cpp.o CMakeFiles/Skunk.dir/uci.cpp.o -o Skunk

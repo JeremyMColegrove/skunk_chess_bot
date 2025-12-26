@@ -23,6 +23,9 @@ void test_positions();
 std::vector<std::string> split_command(const std::string& input);
 
 int main(int argc, char **argv) {
+    // Initialize LMR reduction table at startup
+    init_lmr_table();
+
     if (argc > 1 && strcmp(argv[1], "test_suite")==0) {
         test_positions();
     } else if (argc > 2) {
